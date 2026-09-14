@@ -9,7 +9,11 @@ const prefix = regionMode ? "region" : "native";
 const application = await electron.launch({
   args: [".", "--dev"],
   cwd: root,
-  env: { ...process.env, ELECTRON_ENABLE_LOGGING: "1" },
+  env: {
+    ...process.env,
+    ELECTRON_ENABLE_LOGGING: "1",
+    STUDIO_USER_DATA: path.join(root, "tests/.profile"),
+  },
 });
 try {
   const page = await application.firstWindow();
@@ -50,9 +54,14 @@ try {
   await page
     .getByRole("button", { name: "Start recording", exact: true })
     .click();
-  await page
-    .getByRole("button", { name: "Finish recording", exact: true })
-    .waitFor({ timeout: 30000 });
+  // The editor hides after a countdown; the floating bar controls the take.
+  await expect
+    .poll(() => application.windows().some((p) => p.url().includes("#bar")), {
+      timeout: 30000,
+    })
+    .toBe(true);
+  const bar = application.windows().find((p) => p.url().includes("#bar"));
+  await bar.getByRole("button", { name: "Finish" }).waitFor();
   await new Promise((r) => setTimeout(r, 1800));
   const position = await application.evaluate(({ BrowserWindow, screen }) => {
     const w = BrowserWindow.getAllWindows().find(
@@ -94,17 +103,15 @@ try {
     ],
     { windowsHide: true },
   );
-  await page
+  await bar
     .getByRole("button", { name: "Pause recording", exact: true })
     .click();
   await new Promise((r) => setTimeout(r, 500));
-  await page
+  await bar
     .getByRole("button", { name: "Resume recording", exact: true })
     .click();
   await new Promise((r) => setTimeout(r, 1300));
-  await page
-    .getByRole("button", { name: "Finish recording", exact: true })
-    .click();
+  await bar.getByRole("button", { name: "Finish" }).click();
   await page
     .getByText("Recording ready. Make it your own.", { exact: true })
     .waitFor({ timeout: 20000 });
@@ -181,5 +188,6 @@ try {
     "PASS: real desktop window capture, Windows system audio requested, pause/resume, editor import, rendered export.",
   );
 } finally {
-  await application.close();
+  await application.evaluate(({ app }) => app.exit(0)).catch(() => {});
+  await application.close().catch(() => {});
 }

@@ -207,6 +207,14 @@ export default function App() {
   const [recording, setRecording] = useState(false);
   const [recordPaused, setRecordPaused] = useState(false);
   const [recordTime, setRecordTime] = useState(0);
+  const [countdown, setCountdown] = useState(() => {
+    try {
+      return localStorage.getItem("studio-countdown") !== "off";
+    } catch {
+      return true;
+    }
+  });
+  const discardRef = useRef(false);
   const [notes, setNotes] = useState("");
   const [showNotes, setShowNotes] = useState(false);
   const [exportFormat, setExportFormat] = useState("webm");
@@ -580,12 +588,35 @@ export default function App() {
   );
   useEffect(() => {
     if (!recording) return;
-    const timer = setInterval(
-      () => setRecordTime(captureRef.current?.elapsed() || 0),
-      200,
-    );
+    const timer = setInterval(() => {
+      const elapsed = captureRef.current?.elapsed() || 0;
+      setRecordTime(elapsed);
+      void window.studioDesktop?.recordingUi({
+        phase: "status",
+        elapsed,
+        paused: recordPaused,
+      });
+    }, 200);
     return () => clearInterval(timer);
-  }, [recording]);
+  }, [recording, recordPaused]);
+  useEffect(
+    () =>
+      window.studioDesktop?.onCommand((command) => {
+        const control = captureRef.current;
+        if (!control) return;
+        if (command === "pause") {
+          control.pause();
+          setRecordPaused(true);
+        } else if (command === "resume") {
+          control.resume();
+          setRecordPaused(false);
+        } else {
+          discardRef.current = command === "discard";
+          control.stop();
+        }
+      }),
+    [],
+  );
   useEffect(() => {
     const prevent = (e: BeforeUnloadEvent) => {
       if (recording || exportProgress !== null || saved !== "Saved locally") {
@@ -643,7 +674,10 @@ export default function App() {
     }
   }
   async function startRecord() {
+    const desktop = window.studioDesktop;
+    let barShown = false;
     setBusy(true);
+    discardRef.current = false;
     try {
       if (!navigator.mediaDevices?.getDisplayMedia)
         throw new Error(
@@ -657,6 +691,18 @@ export default function App() {
         system: systemAudio,
         fps: recordFps,
         region: regionEnabled ? region : undefined,
+        // Desktop: the screen is shared, so get out of the way and count in
+        // before the first recorded frame.
+        beforeStart: desktop
+          ? async () => {
+              barShown = true;
+              setModal(null);
+              await desktop.recordingUi({
+                phase: "countdown",
+                seconds: countdown ? 3 : 0,
+              });
+            }
+          : undefined,
       });
       captureRef.current = control;
       setModal(null);
@@ -664,9 +710,14 @@ export default function App() {
       setRecordPaused(false);
       setRecordTime(0);
       setBusy(false);
+      if (desktop) void desktop.recordingUi({ phase: "recording", notes });
       const result = await control.done;
       setRecording(false);
       captureRef.current = null;
+      if (discardRef.current) {
+        notify("Take discarded. Ready when you are.");
+        return;
+      }
       if (result.duration < 0.2 || !result.video.size)
         throw new Error(
           "The recording was too short. Record for at least a second.",
@@ -692,6 +743,7 @@ export default function App() {
       );
     } finally {
       setBusy(false);
+      if (desktop && barShown) void desktop.recordingUi({ phase: "idle" });
     }
   }
   function addZoom(mode: "2d" | "3d" = "2d") {
@@ -2030,7 +2082,7 @@ export default function App() {
           </IconButton>
         </div>
       )}
-      {recording && (
+      {recording && !window.studioDesktop && (
         <div className="recording-dock" role="status">
           <span className={`recording-dot ${recordPaused ? "paused" : ""}`} />
           <div>
@@ -2063,7 +2115,7 @@ export default function App() {
           {window.studioDesktop && <kbd>Ctrl Shift R</kbd>}
         </div>
       )}
-      {recording && showNotes && (
+      {recording && showNotes && !window.studioDesktop && (
         <div className="speaker-notes">
           <div>
             <strong>Speaker notes</strong>
@@ -2137,6 +2189,22 @@ export default function App() {
               <option value={60}>60 fps</option>
             </select>
           </label>
+          {window.studioDesktop && (
+            <Toggle
+              label="3-second countdown"
+              checked={countdown}
+              onChange={(value) => {
+                setCountdown(value);
+                try {
+                  localStorage.setItem(
+                    "studio-countdown",
+                    value ? "on" : "off",
+                  );
+                } catch {}
+              }}
+              description="Studio Screen hides while you record"
+            />
+          )}
           <details className="notes-details">
             <summary>
               Speaker notes <Type size={14} />
@@ -2148,8 +2216,9 @@ export default function App() {
               onChange={(e) => setNotes(e.target.value)}
             />
             <small>
-              Notes are visible in this app. If you record this window, they
-              will be captured.
+              {window.studioDesktop
+                ? "Open them from the recording bar. They never appear in the video."
+                : "Notes are visible in this app. If you record this window, they will be captured."}
             </small>
           </details>
           <div className="modal-actions">

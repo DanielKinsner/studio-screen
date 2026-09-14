@@ -16,3 +16,5 @@ tests/*-results.json
 !.env.example
 *.pem
 *.key
+tests/.profile/
+tests/*.jsonl

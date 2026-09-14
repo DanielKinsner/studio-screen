@@ -8,11 +8,20 @@ const {
   globalShortcut,
   dialog,
 } = require("electron");
+const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { spawn } = require("node:child_process");
 let mainWindow, selectedSource, tracking, pointerTimer;
+let barWindow, countdownWindow, recordingDisplay;
 const dev = process.argv.includes("--dev");
+// Automated tests run against a throwaway profile so they never touch the real
+// project library.
+if (process.env.STUDIO_USER_DATA)
+  app.setPath("userData", path.resolve(process.env.STUDIO_USER_DATA));
+// Tests paint the recording bar a unique colour so frames can be scanned for it.
+const testMarker = process.env.STUDIO_TEST_MARKER === "1";
+const testUnprotected = process.env.STUDIO_TEST_UNPROTECTED === "1";
 const entry = pathToFileURL(path.join(__dirname, "../dist/index.html")).href;
 const trusted = (url) =>
   dev ? /^http:\/\/127\.0\.0\.1:5173(?:\/|$)/.test(url) : url === entry;
@@ -28,6 +37,144 @@ const assertSender = (event) => {
   )
     throw new Error("Untrusted application request.");
 };
+const assertBar = (event) => {
+  if (!barWindow || event.sender !== barWindow.webContents)
+    throw new Error("Untrusted recording bar request.");
+};
+
+// Remembered window preferences (currently the interface zoom level).
+const statePath = () => path.join(app.getPath("userData"), "window-state.json");
+function readState() {
+  try {
+    return JSON.parse(fs.readFileSync(statePath(), "utf8"));
+  } catch {
+    return {};
+  }
+}
+function writeState(patch) {
+  try {
+    fs.writeFileSync(statePath(), JSON.stringify({ ...readState(), ...patch }));
+  } catch {}
+}
+
+function loadView(win, view) {
+  if (dev) return win.loadURL(`http://127.0.0.1:5173/#${view}`);
+  return win.loadFile(path.join(__dirname, "../dist/index.html"), {
+    hash: view,
+  });
+}
+function lockDown(win) {
+  // Keep the window's own title rather than the page's.
+  win.on("page-title-updated", (event) => event.preventDefault());
+  win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  win.webContents.on("will-navigate", (event) => event.preventDefault());
+}
+function displayForSource() {
+  const byId =
+    selectedSource &&
+    screen
+      .getAllDisplays()
+      .find((d) => String(d.id) === selectedSource.display_id);
+  return byId || screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+}
+const overlayOptions = {
+  frame: false,
+  transparent: true,
+  resizable: false,
+  movable: false,
+  skipTaskbar: true,
+  alwaysOnTop: true,
+  focusable: false,
+  hasShadow: false,
+  show: false,
+  webPreferences: {
+    preload: path.join(__dirname, "preload.cjs"),
+    contextIsolation: true,
+    nodeIntegration: false,
+    sandbox: true,
+    backgroundThrottling: false,
+  },
+};
+function protect(win) {
+  // Windows display affinity "exclude from capture": visible to Dan, absent
+  // from every recording.
+  win.setContentProtection(!testUnprotected);
+  win.setAlwaysOnTop(true, "screen-saver");
+}
+function showCountdown(display, seconds) {
+  return new Promise((resolve) => {
+    const size = 360;
+    const area = display.workArea;
+    countdownWindow = new BrowserWindow({
+      ...overlayOptions,
+      title: "Studio Screen Countdown",
+      width: size,
+      height: size,
+      x: Math.round(area.x + (area.width - size) / 2),
+      y: Math.round(area.y + (area.height - size) / 2),
+    });
+    const win = countdownWindow;
+    lockDown(win);
+    protect(win);
+    win.setIgnoreMouseEvents(true);
+    win.once("ready-to-show", () => {
+      win.showInactive();
+      setTimeout(() => {
+        if (!win.isDestroyed()) win.close();
+        resolve();
+      }, seconds * 1000);
+    });
+    win.on("closed", () => {
+      if (countdownWindow === win) countdownWindow = undefined;
+      resolve();
+    });
+    loadView(win, `countdown?${seconds}`);
+  });
+}
+const BAR = { width: 520, height: 76, expanded: 330 };
+function barBounds(display, expanded) {
+  const area = display.workArea;
+  const height = expanded ? BAR.expanded : BAR.height;
+  return {
+    width: BAR.width,
+    height,
+    x: Math.round(area.x + (area.width - BAR.width) / 2),
+    y: Math.round(area.y + area.height - height - 28),
+  };
+}
+function showBar(display, status) {
+  if (barWindow && !barWindow.isDestroyed()) return;
+  barWindow = new BrowserWindow({
+    ...overlayOptions,
+    ...barBounds(display, false),
+    title: "Studio Screen Recording",
+    movable: true,
+  });
+  const win = barWindow;
+  lockDown(win);
+  protect(win);
+  win.once("ready-to-show", () => {
+    win.showInactive();
+    win.webContents.send("studio:status", status);
+  });
+  win.on("closed", () => {
+    if (barWindow !== win) return;
+    barWindow = undefined;
+    // Closing the bar (for example with Alt+F4) finishes the take.
+    mainWindow?.webContents.send("studio:command", "stop");
+  });
+  loadView(win, testMarker ? "bar?marker" : "bar");
+}
+function closeRecordingUi() {
+  for (const win of [barWindow, countdownWindow]) {
+    if (win && !win.isDestroyed()) {
+      win.removeAllListeners("closed");
+      win.close();
+    }
+  }
+  barWindow = countdownWindow = undefined;
+}
+
 function stopTracking() {
   if (tracking) {
     tracking.kill();
@@ -75,13 +222,35 @@ app.whenReady().then(() => {
       backgroundThrottling: false,
     },
   });
+  // Zoom is applied only once the window is showing: setting it earlier stops
+  // Electron from ever reporting the page as ready to show.
+  const applyZoom = () =>
+    mainWindow.webContents.setZoomLevel(Number(readState().zoom) || 0);
   mainWindow.once("ready-to-show", () => {
     mainWindow.maximize();
     mainWindow.show();
+    applyZoom();
   });
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   mainWindow.webContents.on("will-navigate", (event, url) => {
     if (!trusted(url)) event.preventDefault();
+  });
+  // Ctrl + / Ctrl - / Ctrl 0 scale the whole interface and remember it.
+  mainWindow.webContents.on("did-finish-load", () => {
+    if (mainWindow.isVisible()) applyZoom();
+  });
+  mainWindow.webContents.on("before-input-event", (event, input) => {
+    if (input.type !== "keyDown" || !input.control || input.alt || input.meta)
+      return;
+    let zoom = mainWindow.webContents.getZoomLevel();
+    if (input.key === "=" || input.key === "+") zoom = Math.min(3, zoom + 0.5);
+    else if (input.key === "-" || input.key === "_")
+      zoom = Math.max(-2, zoom - 0.5);
+    else if (input.key === "0") zoom = 0;
+    else return;
+    event.preventDefault();
+    mainWindow.webContents.setZoomLevel(zoom);
+    writeState({ zoom });
   });
   session.defaultSession.setPermissionRequestHandler(
     (contents, permission, callback) =>
@@ -139,6 +308,46 @@ app.whenReady().then(() => {
     selectedSource = sources.find((s) => s.id === id);
     if (!selectedSource)
       throw new Error("The selected screen or window is no longer available.");
+  });
+  // Recording phases driven by the editor: countdown -> recording -> idle.
+  ipcMain.handle("studio:recording-ui", async (event, state) => {
+    assertSender(event);
+    const phase = state?.phase;
+    if (phase === "countdown") {
+      recordingDisplay = displayForSource();
+      mainWindow.hide();
+      const seconds = Math.max(
+        0,
+        Math.min(10, Math.round(+state.seconds || 0)),
+      );
+      if (seconds) await showCountdown(recordingDisplay, seconds);
+    } else if (phase === "recording") {
+      showBar(recordingDisplay || displayForSource(), {
+        elapsed: 0,
+        paused: false,
+        notes: String(state.notes || "").slice(0, 20000),
+      });
+    } else if (phase === "status") {
+      barWindow?.webContents.send("studio:status", {
+        elapsed: +state.elapsed || 0,
+        paused: !!state.paused,
+      });
+    } else if (phase === "idle") {
+      closeRecordingUi();
+      recordingDisplay = undefined;
+      if (!mainWindow.isVisible()) mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+  ipcMain.handle("studio:bar-command", (event, name) => {
+    assertBar(event);
+    if (["pause", "resume", "stop", "discard"].includes(name))
+      mainWindow?.webContents.send("studio:command", name);
+  });
+  ipcMain.handle("studio:bar-expand", (event, expanded) => {
+    assertBar(event);
+    const display = screen.getDisplayMatching(barWindow.getBounds());
+    barWindow.setBounds(barBounds(display, !!expanded));
   });
   ipcMain.handle("studio:track", async (event, enabled) => {
     assertSender(event);
@@ -217,6 +426,7 @@ app.whenReady().then(() => {
   });
   mainWindow.on("closed", () => {
     stopTracking();
+    closeRecordingUi();
     mainWindow = undefined;
   });
   if (dev) mainWindow.loadURL("http://127.0.0.1:5173");

@@ -71,6 +71,8 @@ export type CaptureOptions = {
   system: boolean;
   fps: number;
   region?: Region;
+  /** Runs once the screen stream is live, before anything is recorded. */
+  beforeStart?: () => Promise<void>;
 };
 export async function capture(options: CaptureOptions) {
   const streams: MediaStream[] = [];
@@ -162,12 +164,13 @@ export async function capture(options: CaptureOptions) {
     let started = performance.now(),
       pausedAt = 0,
       paused = 0,
-      stopping = false;
+      stopping = false,
+      live = false;
     const elapsed = () =>
       ((pausedAt || performance.now()) - started - paused) / 1000;
     if (window.studioDesktop) {
       unsubscribe = window.studioDesktop.onPoint((pt) => {
-        if (pausedAt || stopping) return;
+        if (!live || pausedAt || stopping) return;
         const r = options.region;
         const x = r ? (pt.x - r.x) / r.width : pt.x,
           y = r ? (pt.y - r.y) / r.height : pt.y;
@@ -225,7 +228,11 @@ export async function capture(options: CaptureOptions) {
       if (record.state !== "inactive") record.stop();
     };
     display.getVideoTracks()[0].onended = stop;
+    await options.beforeStart?.();
+    if (display.getVideoTracks()[0].readyState === "ended")
+      throw new Error("Screen sharing ended before recording started.");
     started = performance.now();
+    live = true;
     record.start(1000);
     return {
       done,

@@ -245,6 +245,27 @@ declare global {
         }) => void,
       ) => () => void;
       onStop: (cb: () => void) => () => void;
+      recordingUi: (
+        state:
+          | { phase: "countdown"; seconds: number }
+          | { phase: "recording"; notes: string }
+          | { phase: "status"; elapsed: number; paused: boolean }
+          | { phase: "idle" },
+      ) => Promise<void>;
+      onCommand: (
+        cb: (command: "pause" | "resume" | "stop" | "discard") => void,
+      ) => () => void;
+    };
+    studioBar?: {
+      onStatus: (
+        cb: (status: {
+          elapsed: number;
+          paused: boolean;
+          notes?: string;
+        }) => void,
+      ) => () => void;
+      command: (name: "pause" | "resume" | "stop" | "discard") => Promise<void>;
+      setExpanded: (expanded: boolean) => Promise<void>;
     };
   }
 }
