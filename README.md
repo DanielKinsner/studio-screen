@@ -4,6 +4,8 @@ A local-first screen recorder and editor for Windows that aims to be almost done
 
 Personal tool. System audio is recorded; microphone and camera capture are intentionally not included. Direction and decisions: [docs/SPEC.md](docs/SPEC.md). Build plan and what was built: [docs/PLAN.md](docs/PLAN.md). Where things stand: [STATUS.md](STATUS.md).
 
+Moving to another PC? See [the machine handoff](docs/MACHINE-HANDOFF.md) for exact setup commands, local-data transfer, and the paused work.
+
 ## Run
 
 Needs Node and Rust (for the capture helper).
