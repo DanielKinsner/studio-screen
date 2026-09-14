@@ -11,6 +11,8 @@ const limits: Partial<Record<keyof Settings, [number, number]>> = {
   cursorSize: [0.5, 4],
   motionIntensity: [5, 40],
   motionBlur: [0, 100],
+  cameraResponse: [0.2, 1.5],
+  cameraBounce: [0, 0.4],
   cursorSmoothing: [0, 0.5],
   cursorAngle: [-90, 90],
   clickVolume: [0, 50],
@@ -23,7 +25,7 @@ const limits: Partial<Record<keyof Settings, [number, number]>> = {
 const choices: Partial<Record<keyof Settings, string[]>> = {
   aspect: ["16:9", "9:16", "1:1", "4:3", "4:5", "21:9"],
   motionMode: ["2d", "3d"],
-  motionEase: ["focused", "smooth", "gentle"],
+  motionEase: ["focused", "smooth", "gentle", "custom"],
   cursorStyle: ["dark", "light", "dot"],
   clickStyle: ["ring", "pulse"],
   captionTheme: ["classic", "light", "minimal"],

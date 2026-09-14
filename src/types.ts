@@ -21,6 +21,8 @@ export type Zoom = {
   offsetX?: number;
   offsetY?: number;
   perspective?: number;
+  /** Click-driven focus changes inside an automatic zoom (source seconds). */
+  focus?: { t: number; x: number; y: number }[];
 };
 export type Caption = { id: string; start: number; end: number; text: string };
 export type Annotation = {
@@ -70,7 +72,11 @@ export type Settings = {
   crop: number;
   motionMode: "2d" | "3d";
   motionIntensity: number;
-  motionEase: "focused" | "smooth" | "gentle";
+  motionEase: "focused" | "smooth" | "gentle" | "custom";
+  /** Camera spring: roughly how long a move takes, in seconds. */
+  cameraResponse: number;
+  /** Camera spring overshoot: 0 glides in, higher values bounce. */
+  cameraBounce: number;
   motionBlur: number;
   followCursor: boolean;
   cursorStyle: "dark" | "light" | "dot";
@@ -136,6 +142,8 @@ export const defaults: Settings = {
   motionMode: "2d",
   motionIntensity: 18,
   motionEase: "smooth",
+  cameraResponse: 0.6,
+  cameraBounce: 0,
   motionBlur: 0,
   followCursor: false,
   cursorStyle: "dark",
@@ -154,6 +162,12 @@ export const defaults: Settings = {
   watermark: "",
   watermarkOpacity: 65,
 };
+/** Named camera feels shown as Snappy / Smooth / Floaty. */
+export const cameraFeel = {
+  focused: { response: 0.38, bounce: 0.08 },
+  smooth: { response: 0.6, bounce: 0 },
+  gentle: { response: 0.95, bounce: 0 },
+} as const;
 export const backgrounds = [
   { id: "dune", name: "Dune", colors: ["#f5cd9e", "#d97c68", "#98495b"] },
   { id: "sage", name: "Sage", colors: ["#d8e5c7", "#83a58c", "#365d56"] },

@@ -1,10 +1,20 @@
 import { cleanSettings } from "./settings";
 import type { Project } from "./types";
-import { defaults } from "./types";
+import { cameraFeel, defaults } from "./types";
 export function migrateProject(p: Project): Project {
+  const saved = cleanSettings(p.settings);
+  // Projects saved before the spring camera only know their movement style.
+  const feel =
+    cameraFeel[saved.motionEase as keyof typeof cameraFeel] ??
+    cameraFeel.smooth;
   return {
     ...p,
-    settings: { ...defaults, ...cleanSettings(p.settings) },
+    settings: {
+      ...defaults,
+      cameraResponse: feel.response,
+      cameraBounce: feel.bounce,
+      ...saved,
+    },
     speeds: p.speeds || [],
     hiddenCursor: p.hiddenCursor || [],
     dismissedZooms: p.dismissedZooms || [],
@@ -129,6 +139,24 @@ export async function readProject(file: File): Promise<Project> {
     z.x = Math.max(0, Math.min(1, z.x));
     z.y = Math.max(0, Math.min(1, z.y));
     z.scale = Math.max(1, Math.min(4, z.scale));
+    if (z.focus !== undefined) {
+      if (
+        !Array.isArray(z.focus) ||
+        z.focus.some(
+          (f: Partial<Record<"t" | "x" | "y", unknown>> | null) =>
+            !f ||
+            !Number.isFinite(f.t) ||
+            !Number.isFinite(f.x) ||
+            !Number.isFinite(f.y),
+        )
+      )
+        throw new Error("Invalid focus point.");
+      z.focus = z.focus.map((f: { t: number; x: number; y: number }) => ({
+        t: f.t,
+        x: Math.max(0, Math.min(1, f.x)),
+        y: Math.max(0, Math.min(1, f.y)),
+      }));
+    }
     for (const [key, min, max] of [
       ["tiltX", -40, 40],
       ["tiltY", -40, 40],

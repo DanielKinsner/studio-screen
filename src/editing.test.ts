@@ -10,6 +10,9 @@ import {
 } from "./timeline";
 import { poseAt } from "./motion";
 import { fadeAt, clickEvents } from "./sound";
+import { migrateProject } from "./storage";
+import { cleanSettings } from "./settings";
+import { cameraFeel } from "./types";
 describe("Edited timing", () => {
   it("maps variable speeds and overlapping cuts in both directions", () => {
     const p = newProject();
@@ -95,5 +98,38 @@ describe("Motion and audio", () => {
     expect(fadeAt(9.5, 10, 1)).toBe(0.5);
     expect(fadeAt(0.5, 1, 2)).toBe(0.25);
     expect(fadeAt(0, 10, 0)).toBe(1);
+  });
+});
+describe("Camera feel settings", () => {
+  it("gives older projects the spring that matches their movement style", () => {
+    const p = newProject();
+    const { cameraResponse, cameraBounce, ...legacy } = p.settings;
+    void cameraResponse;
+    void cameraBounce;
+    const migrated = migrateProject({
+      ...p,
+      settings: { ...legacy, motionEase: "gentle" } as typeof p.settings,
+    });
+    expect(migrated.settings.cameraResponse).toBe(cameraFeel.gentle.response);
+    expect(migrated.settings.cameraBounce).toBe(cameraFeel.gentle.bounce);
+  });
+  it("keeps custom spring values that were saved explicitly", () => {
+    const p = newProject();
+    p.settings = {
+      ...p.settings,
+      motionEase: "custom",
+      cameraResponse: 1.2,
+      cameraBounce: 0.2,
+    };
+    expect(migrateProject(p).settings).toMatchObject({
+      motionEase: "custom",
+      cameraResponse: 1.2,
+      cameraBounce: 0.2,
+    });
+  });
+  it("clamps imported spring values", () => {
+    expect(
+      cleanSettings({ cameraResponse: 9, cameraBounce: -1, motionEase: "odd" }),
+    ).toEqual({ cameraResponse: 1.5, cameraBounce: 0 });
   });
 });

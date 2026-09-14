@@ -1,4 +1,5 @@
-import type { Caption, Project, Zoom } from "./types";
+import type { Caption, Point, Project, Zoom } from "./types";
+import { memo } from "./spring";
 export const clamp = (n: number, min: number, max: number) =>
   Math.min(max, Math.max(min, n));
 export const timecode = (n: number) =>
@@ -37,13 +38,11 @@ export function playbackSegments(p: Project) {
           .filter((t) => t > segment.start && t < segment.end),
       ]),
     ].sort((a, b) => a - b);
-    return edges
-      .slice(0, -1)
-      .map((start, i) => ({
-        start,
-        end: edges[i + 1],
-        rate: speedAt(p, start + 0.000001),
-      }));
+    return edges.slice(0, -1).map((start, i) => ({
+      start,
+      end: edges[i + 1],
+      rate: speedAt(p, start + 0.000001),
+    }));
   });
 }
 export function outputDuration(p: Project) {
@@ -81,41 +80,110 @@ export function zoomWeight(z: Zoom, t: number, ease = "smooth") {
   const v = clamp(Math.min((t - z.start) / edge, (z.end - t) / edge), 0, 1);
   return ease === "focused" ? 1 - (1 - v) ** 3 : v * v * (3 - 2 * v);
 }
-export function zoomAt(zooms: Zoom[], t: number) {
-  const z = zooms.find((z) => t >= z.start && t <= z.end);
-  if (!z) return { scale: 1, x: 0.5, y: 0.5 };
-  const smooth = zoomWeight(z, t);
-  return { scale: 1 + (z.scale - 1) * smooth, x: z.x, y: z.y };
-}
+/** Hold a zoom this long after the last click of a group. */
+export const AUTO_HOLD = 2.2;
+/** Groups closer than this stay zoomed in instead of zooming out and back. */
+const MERGE_GAP = 1.5;
+/** Clicks closer than this share one focus change. */
+const COALESCE = 0.4;
+/** A click inside the middle 60% of the zoomed view does not move the camera. */
+const DEADZONE = 0.3;
+const demoClicks = [
+  { t: 5, x: 0.66, y: 0.4 },
+  { t: 14, x: 0.4, y: 0.6 },
+];
+
+/** Seconds before a click that the camera starts moving, so it arrives on time. */
+export const zoomLead = (response: number) => clamp(0.9 * response, 0.3, 1.2);
+
+/** Where the view centre can sit at this magnification without leaving the frame. */
+export const clampCenter = (v: number, scale: number) =>
+  clamp(v, 0.5 / scale, 1 - 0.5 / scale);
+
+type Click = { t: number; x: number; y: number };
+
+const generateZooms = memo(
+  (
+    zooms: Zoom[],
+    points: Point[],
+    demo: boolean,
+    dismissed: string[],
+    duration: number,
+    scale: number,
+    response: number,
+    mode: "2d" | "3d",
+  ): Zoom[] => {
+    const lead = zoomLead(response);
+    const clicks: Click[] = (
+      demo ? demoClicks : points.filter((pt) => pt.click)
+    )
+      // Clicks inside a hand-placed zoom belong to that zoom.
+      .filter(
+        (c) => !zooms.some((z) => c.t >= z.start - 1 && c.t <= z.end + 1),
+      );
+    const groups: Click[][] = [];
+    for (const c of clicks) {
+      const last = groups.at(-1);
+      if (
+        last &&
+        c.t - lead - (last[last.length - 1].t + AUTO_HOLD) < MERGE_GAP
+      )
+        last.push(c);
+      else groups.push([c]);
+    }
+    const generated = groups.flatMap((group): Zoom[] => {
+      const id = `auto-${group[0].t}`;
+      if (dismissed.includes(id) || zooms.some((z) => z.id === id)) return [];
+      const focus: (Click & { click: number })[] = [];
+      for (const c of group) {
+        const prev = focus.at(-1);
+        if (prev) {
+          const dx = clampCenter(c.x, scale) - clampCenter(prev.x, scale),
+            dy = clampCenter(c.y, scale) - clampCenter(prev.y, scale);
+          if (
+            Math.abs(dx) < DEADZONE / scale &&
+            Math.abs(dy) < DEADZONE / scale
+          )
+            continue;
+          if (c.t - prev.click < COALESCE) {
+            prev.x = c.x;
+            prev.y = c.y;
+            continue;
+          }
+        }
+        focus.push({ t: Math.max(0, c.t - lead), x: c.x, y: c.y, click: c.t });
+      }
+      return [
+        {
+          id,
+          start: Math.max(0, group[0].t - lead),
+          end: Math.min(duration, group[group.length - 1].t + AUTO_HOLD),
+          x: focus[0].x,
+          y: focus[0].y,
+          scale,
+          mode,
+          follow: true,
+          focus: focus.map(({ t, x, y }) => ({ t, x, y })),
+        },
+      ];
+    });
+    return [...zooms, ...generated].sort((a, b) => a.start - b.start);
+  },
+);
+
+/** Hand-placed zooms plus zooms generated from grouped clicks. */
 export function autoZooms(p: Project): Zoom[] {
   if (!p.settings.autoZoom) return p.zooms;
-  const generated: Zoom[] = [];
-  const clicks = p.demo
-    ? [
-        { t: 5, x: 0.66, y: 0.4 },
-        { t: 14, x: 0.4, y: 0.6 },
-      ]
-    : p.points.filter((pt) => pt.click);
-  for (const pt of clicks) {
-    if (
-      p.dismissedZooms?.includes(`auto-${pt.t}`) ||
-      p.zooms.some((z) => z.id === `auto-${pt.t}`) ||
-      generated.some((z) => pt.t < z.end + 0.6) ||
-      p.zooms.some((z) => pt.t >= z.start - 1 && pt.t <= z.end + 1)
-    )
-      continue;
-    generated.push({
-      id: `auto-${pt.t}`,
-      start: Math.max(0, pt.t - 0.7),
-      end: Math.min(p.duration, pt.t + 3.5),
-      x: pt.x,
-      y: pt.y,
-      scale: p.settings.zoomStrength,
-      mode: p.settings.motionMode,
-      follow: true,
-    });
-  }
-  return [...p.zooms, ...generated].sort((a, b) => a.start - b.start);
+  return generateZooms(
+    p.zooms,
+    p.points,
+    p.demo,
+    p.dismissedZooms || [],
+    p.duration,
+    p.settings.zoomStrength,
+    p.settings.cameraResponse,
+    p.settings.motionMode,
+  );
 }
 export function typingSections(p: Project) {
   const events = p.points.filter((pt) => pt.typing);
