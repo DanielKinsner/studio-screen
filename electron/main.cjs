@@ -7,7 +7,9 @@ const {
   screen,
   globalShortcut,
   dialog,
+  shell,
 } = require("electron");
+const { randomUUID } = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
@@ -55,6 +57,29 @@ function writeState(patch) {
   try {
     fs.writeFileSync(statePath(), JSON.stringify({ ...readState(), ...patch }));
   } catch {}
+}
+
+// Finished videos stream straight to disk here (tests point it elsewhere).
+const exportsDir = () =>
+  process.env.STUDIO_EXPORT_DIR
+    ? path.resolve(process.env.STUDIO_EXPORT_DIR)
+    : path.join(app.getPath("videos"), "Studio Screen", "Exports");
+const openExports = new Map();
+async function uniquePath(dir, name, extension) {
+  const base = (
+    name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "").trim() || "Studio Screen"
+  ).slice(0, 80);
+  for (let i = 0; ; i++) {
+    const file = path.join(
+      dir,
+      `${base}${i ? ` (${i + 1})` : ""}.${extension}`,
+    );
+    try {
+      await fs.promises.access(file);
+    } catch {
+      return file;
+    }
+  }
 }
 
 function loadView(win, view) {
@@ -338,6 +363,41 @@ app.whenReady().then(() => {
       if (!mainWindow.isVisible()) mainWindow.show();
       mainWindow.focus();
     }
+  });
+  ipcMain.handle("studio:export-open", async (event, name, extension) => {
+    assertSender(event);
+    if (!["mp4", "webm", "gif"].includes(extension))
+      throw new Error("Unsupported export format.");
+    const dir = exportsDir();
+    await fs.promises.mkdir(dir, { recursive: true });
+    const file = await uniquePath(dir, String(name || ""), extension);
+    const handle = await fs.promises.open(file, "w");
+    const id = randomUUID();
+    openExports.set(id, { handle, file });
+    return { id, path: file };
+  });
+  ipcMain.handle("studio:export-write", async (event, id, position, data) => {
+    assertSender(event);
+    const entry = openExports.get(id);
+    if (!entry || !(data instanceof Uint8Array) || !(position >= 0))
+      throw new Error("Invalid export write.");
+    await entry.handle.write(data, 0, data.length, position);
+  });
+  ipcMain.handle("studio:export-close", async (event, id, keep) => {
+    assertSender(event);
+    const entry = openExports.get(id);
+    if (!entry) return;
+    openExports.delete(id);
+    await entry.handle.close();
+    // A cancelled or failed export never leaves a half-written file behind.
+    if (!keep) await fs.promises.rm(entry.file, { force: true });
+  });
+  ipcMain.handle("studio:reveal", (event, file) => {
+    assertSender(event);
+    const resolved = path.resolve(String(file));
+    if (!resolved.startsWith(exportsDir() + path.sep))
+      throw new Error("Can only show exported files.");
+    shell.showItemInFolder(resolved);
   });
   ipcMain.handle("studio:bar-command", (event, name) => {
     assertBar(event);

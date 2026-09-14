@@ -43,7 +43,8 @@ try {
     const { newProject } = await import("/src/types.ts");
     const { renderFrame, releaseCompositor } =
       await import("/src/compositor.ts");
-    const { exportVideo, loadVideo, seek, releaseVideo } =
+    const { exportProject } = await import("/src/exporter.ts");
+    const { loadVideo, seek, releaseVideo } =
       await import("/src/media.ts");
     const { outputDuration } = await import("/src/timeline.ts");
     const { projectFile, readProject } = await import("/src/storage.ts");
@@ -95,7 +96,7 @@ try {
     );
     if (restored.zooms[0].tiltY !== 25 || restored.speeds[0].rate !== 2)
       throw new Error("3D archive roundtrip failed");
-    const blob = await exportVideo(p, {
+    const blob = await exportProject(p, {
       format: "mp4",
       height: 480,
       fps: 30,

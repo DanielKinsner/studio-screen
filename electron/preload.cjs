@@ -12,6 +12,14 @@ contextBridge.exposeInMainWorld("studioDesktop", {
   onStop: (callback) => listen("studio:stop", callback),
   recordingUi: (state) => ipcRenderer.invoke("studio:recording-ui", state),
   onCommand: (callback) => listen("studio:command", callback),
+  exportFile: {
+    open: (name, extension) =>
+      ipcRenderer.invoke("studio:export-open", name, extension),
+    write: (id, position, data) =>
+      ipcRenderer.invoke("studio:export-write", id, position, data),
+    close: (id, keep) => ipcRenderer.invoke("studio:export-close", id, keep),
+    reveal: (file) => ipcRenderer.invoke("studio:reveal", file),
+  },
 });
 // Used by the floating recording bar and countdown windows.
 contextBridge.exposeInMainWorld("studioBar", {

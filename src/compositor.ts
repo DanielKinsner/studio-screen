@@ -10,8 +10,10 @@ import {
   poseAt,
 } from "./motion";
 import { PerspectiveRenderer } from "./perspective";
-type Media = {
+export type Media = {
   video?: HTMLVideoElement | null;
+  /** An exactly decoded source frame (export); takes priority over `video`. */
+  frame?: { image: CanvasImageSource; width: number; height: number } | null;
   camera?: HTMLVideoElement | null;
   background?: HTMLImageElement | null;
 };
@@ -309,9 +311,10 @@ function drawScreen(
   media: Media,
 ) {
   const s = p.settings;
-  const source = p.demo ? demoFrame(t) : media.video;
-  const sw = p.demo ? 1280 : media.video?.videoWidth || 1920,
-    sh = p.demo ? 800 : media.video?.videoHeight || 1080;
+  const frame = media.frame;
+  const source = p.demo ? demoFrame(t) : (frame?.image ?? media.video);
+  const sw = p.demo ? 1280 : frame?.width || media.video?.videoWidth || 1920,
+    sh = p.demo ? 800 : frame?.height || media.video?.videoHeight || 1080;
   const pad = (Math.min(w, h) * s.padding) / 100;
   const fit = Math.min((w - pad * 2) / sw, (h - pad * 2) / sh);
   const fw = sw * fit,
@@ -335,7 +338,7 @@ function drawScreen(
   const zy = clamp(zoom.y * fh * scale - fh / 2, 0, fh * (scale - 1));
   c.translate(fx - zx, fy - zy);
   c.scale(scale, scale);
-  if (source && (p.demo || (media.video?.readyState || 0) >= 2))
+  if (source && (p.demo || frame || (media.video?.readyState || 0) >= 2))
     c.drawImage(source, 0, 0, fw, fh);
   if (s.showCursor && (p.demo || p.points.length)) {
     const point = smoothPointer(p, t);

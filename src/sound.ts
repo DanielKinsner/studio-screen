@@ -16,7 +16,7 @@ export function clickEvents(p: Project) {
     .map((t) => outputTimeAt(p, t));
 }
 export function playClick(
-  context: AudioContext,
+  context: BaseAudioContext,
   destination: AudioNode,
   volume: number,
   when = context.currentTime,

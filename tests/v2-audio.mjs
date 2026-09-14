@@ -40,7 +40,7 @@ try {
   );
   const out = await page.evaluate(async (data) => {
     const { newProject } = await import("/src/types.ts");
-    const { exportVideo } = await import("/src/media.ts");
+    const { exportProject } = await import("/src/exporter.ts");
     const p = newProject(false);
     p.video = new Blob([Uint8Array.from(atob(data), (c) => c.charCodeAt(0))], {
       type: "video/mp4",
@@ -51,7 +51,7 @@ try {
     p.settings.autoZoom = false;
     p.cuts = [{ id: "c", start: 1, end: 1.5 }];
     p.speeds = [{ id: "s", start: 2, end: 3, rate: 2 }];
-    const blob = await exportVideo(p, {
+    const blob = await exportProject(p, {
       format: "webm",
       height: 480,
       fps: 30,

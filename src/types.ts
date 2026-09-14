@@ -255,6 +255,19 @@ declare global {
       onCommand: (
         cb: (command: "pause" | "resume" | "stop" | "discard") => void,
       ) => () => void;
+      exportFile: {
+        open: (
+          name: string,
+          extension: string,
+        ) => Promise<{ id: string; path: string }>;
+        write: (
+          id: string,
+          position: number,
+          data: Uint8Array,
+        ) => Promise<void>;
+        close: (id: string, keep: boolean) => Promise<void>;
+        reveal: (file: string) => Promise<void>;
+      };
     };
     studioBar?: {
       onStatus: (

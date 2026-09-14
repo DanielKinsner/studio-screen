@@ -77,14 +77,8 @@ import {
   timecode,
 } from "./timeline";
 import { dimensions, renderFrame } from "./compositor";
-import {
-  capture,
-  exportVideo,
-  getDuration,
-  loadVideo,
-  releaseVideo,
-  videoMime,
-} from "./media";
+import { exportProject, type ExportFormat } from "./exporter";
+import { capture, getDuration, loadVideo, releaseVideo } from "./media";
 import {
   deleteProject,
   download,
@@ -217,11 +211,13 @@ export default function App() {
   const discardRef = useRef(false);
   const [notes, setNotes] = useState("");
   const [showNotes, setShowNotes] = useState(false);
-  const [exportFormat, setExportFormat] = useState("webm");
+  const [exportFormat, setExportFormat] = useState<ExportFormat>("mp4");
   const [exportHeight, setExportHeight] = useState(1080);
   const [exportFps, setExportFps] = useState(30);
   const [exportProgress, setExportProgress] = useState<number | null>(null);
   const [exportDone, setExportDone] = useState(false);
+  const [exportSpeed, setExportSpeed] = useState(0);
+  const [exportedPath, setExportedPath] = useState<string | null>(null);
   const [mediaVersion, setMediaVersion] = useState(0);
   const [timelineScale, setTimelineScale] = useState(1);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -794,24 +790,50 @@ export default function App() {
   async function runExport() {
     setPlaying(false);
     setExportDone(false);
+    setExportedPath(null);
+    setExportSpeed(0);
     const controller = new AbortController();
     abortRef.current = controller;
     setExportProgress(0);
+    const desktop = window.studioDesktop;
+    const format = exportFormat;
+    const name =
+      project.name.replace(/[^a-z0-9 -]/gi, "").trim() || "Studio Screen";
+    let file: { id: string; path: string } | undefined;
+    let kept = false;
+    let lastReport = 0;
     try {
-      const blob = await exportVideo(project, {
-        format: exportFormat,
-        height:
-          exportFormat === "gif" ? Math.min(exportHeight, 480) : exportHeight,
-        fps: exportFormat === "gif" ? Math.min(exportFps, 15) : exportFps,
+      // The desktop app streams the file straight to disk as it renders.
+      if (desktop) file = await desktop.exportFile.open(name, format);
+      const blob = await exportProject(project, {
+        format,
+        height: format === "gif" ? Math.min(exportHeight, 480) : exportHeight,
+        fps: format === "gif" ? Math.min(exportFps, 15) : exportFps,
         signal: controller.signal,
-        progress: setExportProgress,
+        progress: (share, info) => {
+          const now = performance.now();
+          if (now - lastReport < 100 && share < 1) return;
+          lastReport = now;
+          setExportProgress(share);
+          setExportSpeed(info.speed);
+        },
+        writer: file
+          ? {
+              write: (position, data) =>
+                desktop!.exportFile.write(file!.id, position, data),
+            }
+          : undefined,
       });
-      download(
-        blob,
-        `${project.name.replace(/[^a-z0-9 -]/gi, "").trim() || "Studio Screen"}.${exportFormat}`,
-      );
+      if (file) {
+        await desktop!.exportFile.close(file.id, true);
+        kept = true;
+        setExportedPath(file.path);
+        notify("Export complete. Saved to Videos › Studio Screen › Exports.");
+      } else if (blob) {
+        download(blob, `${name}.${format}`);
+        notify("Export complete. Your file is ready in downloads.");
+      }
       setExportDone(true);
-      notify("Export complete. Your file is ready in downloads.");
     } catch (e) {
       notify(
         (e as Error).name === "AbortError"
@@ -819,6 +841,8 @@ export default function App() {
           : (e as Error).message,
       );
     } finally {
+      if (file && !kept)
+        await desktop!.exportFile.close(file.id, false).catch(() => {});
       abortRef.current = null;
       setExportProgress(null);
       setMediaVersion((n) => n + 1);
@@ -2247,7 +2271,9 @@ export default function App() {
           }
           subtitle={
             exportDone
-              ? "Your video has been sent to your downloads."
+              ? exportedPath
+                ? "Saved to Videos › Studio Screen › Exports."
+                : "Your video has been sent to your downloads."
               : "Beautifully framed. Entirely yours. No watermark."
           }
           onClose={closeModal}
@@ -2273,6 +2299,17 @@ export default function App() {
                 Keep the editable project too, so your next version is just a
                 few clicks away.
               </p>
+              {exportedPath && (
+                <button
+                  className="button"
+                  onClick={() =>
+                    void window.studioDesktop?.exportFile.reveal(exportedPath)
+                  }
+                >
+                  <FolderOpen size={15} />
+                  Show in folder
+                </button>
+              )}
             </div>
           ) : (
             <>
@@ -2282,15 +2319,12 @@ export default function App() {
                   aria-label="Export format"
                   disabled={exportProgress !== null}
                   value={exportFormat}
-                  onChange={(e) => setExportFormat(e.target.value)}
+                  onChange={(e) =>
+                    setExportFormat(e.target.value as ExportFormat)
+                  }
                 >
-                  <option value="webm">WebM · high quality</option>
-                  <option value="mp4" disabled={!videoMime("mp4")}>
-                    MP4
-                    {!videoMime("mp4")
-                      ? " · unavailable in this browser"
-                      : " · widely compatible"}
-                  </option>
+                  <option value="mp4">MP4 · H.264, plays everywhere</option>
+                  <option value="webm">WebM · VP9</option>
                   <option value="gif">GIF · silent, looping</option>
                 </select>
               </label>
@@ -2324,7 +2358,7 @@ export default function App() {
                 <p>
                   {exportFormat === "gif"
                     ? "GIF exports use up to 480p and 15 fps to keep files manageable. Long GIFs can use significant memory."
-                    : "Exports render locally in real time. Keep this window open and in the foreground until your download is ready."}
+                    : "Renders frame by frame on this computer's graphics card, usually faster than real time. You can minimize the window while it works."}
                 </p>
               </div>
             </>
@@ -2339,7 +2373,10 @@ export default function App() {
               aria-valuemax={100}
             >
               <div>
-                <span>Rendering your story…</span>
+                <span>
+                  Rendering your story…
+                  {exportSpeed > 0 && ` ${exportSpeed.toFixed(1)}× real time`}
+                </span>
                 <strong>{Math.round(exportProgress * 100)}%</strong>
               </div>
               <span>
