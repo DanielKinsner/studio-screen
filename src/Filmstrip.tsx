@@ -9,7 +9,8 @@ export default function Filmstrip({ project }: { project: Project }) {
     let video: HTMLVideoElement | undefined;
     const draw = async () => {
       try {
-        if (project.video) video = await loadVideo(project.video);
+        const media = project.video || project.videoUrl;
+        if (media) video = await loadVideo(media);
         if (!alive) {
           releaseVideo(video);
           return;
@@ -39,7 +40,13 @@ export default function Filmstrip({ project }: { project: Project }) {
     return () => {
       alive = false;
     };
-  }, [project.video, project.demo, project.trimStart, project.trimEnd]);
+  }, [
+    project.video,
+    project.videoUrl,
+    project.demo,
+    project.trimStart,
+    project.trimEnd,
+  ]);
   return (
     <div className="clip-thumbnails" ref={ref}>
       {Array.from({ length: 12 }, (_, i) => (

@@ -85,6 +85,8 @@ const cursorPath = memo((points: Point[], smoothing: number): Path | null => {
 });
 
 type Events = {
+  shapeTimes: number[];
+  shapes: string[];
   clicks: number[];
   moves: number[];
   shortcuts: { t: number; shortcut: string }[];
@@ -94,6 +96,8 @@ type Events = {
 const events = memo((points: Point[], demo: boolean): Events => {
   if (demo)
     return {
+      shapeTimes: [],
+      shapes: [],
       clicks: demoClicks,
       moves: [],
       shortcuts: demoShortcuts,
@@ -108,7 +112,10 @@ const events = memo((points: Point[], demo: boolean): Events => {
   const shortcuts = points
     .filter((pt) => pt.shortcut)
     .map((pt) => ({ t: pt.t, shortcut: pt.shortcut! }));
+  const shaped = points.filter((pt) => pt.cursor);
   return {
+    shapeTimes: shaped.map((pt) => pt.t),
+    shapes: shaped.map((pt) => pt.cursor!),
     clicks: points.filter((pt) => pt.click).map((pt) => pt.t),
     moves,
     shortcuts,
@@ -157,6 +164,13 @@ export function cursorOpacity(p: Project, t: number) {
   const i = lastAtOrBefore(moves, t);
   const lastMove = i >= 0 ? moves[i] : 0;
   return 1 - clamp((t - lastMove - 1.5) / 0.4, 0, 1);
+}
+
+/** Recorded cursor shape at t ("arrow" when unknown). */
+export function cursorShapeAt(p: Project, t: number) {
+  const { shapeTimes, shapes } = events(p.points, p.demo);
+  const i = lastAtOrBefore(shapeTimes, t);
+  return i >= 0 ? shapes[i] : "arrow";
 }
 
 /** Time of the click whose 0.5 s highlight is showing at t. */

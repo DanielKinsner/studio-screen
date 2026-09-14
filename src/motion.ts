@@ -5,6 +5,7 @@ export {
   smoothPointer,
   cursorOpacity,
   clickAt,
+  cursorShapeAt,
   shortcutAt,
 } from "./cursorPath";
 export const tiltPresets: { name: string; value: Partial<Zoom> }[] = [

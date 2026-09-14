@@ -5,6 +5,12 @@ export type Point = {
   click?: boolean;
   shortcut?: string;
   typing?: boolean;
+  /** Right mouse button pressed. */
+  right?: boolean;
+  /** Wheel movement (120 per notch; negative is toward the user). */
+  wheel?: number;
+  /** Cursor shape from this moment on: arrow, text, pointer, … */
+  cursor?: string;
 };
 export type Zoom = {
   id: string;
@@ -112,6 +118,14 @@ export type Project = {
   trimStart: number;
   trimEnd: number;
   points: Point[];
+  /** How the footage was captured: "native" has no cursor baked into the pixels. */
+  capture?: "native" | "legacy";
+  /** Recording folder on disk (native recordings). */
+  folder?: string;
+  /** Streamed from disk instead of stored in the browser database. */
+  videoUrl?: string;
+  /** [seconds, changed share of the screen] for idle detection. */
+  activity?: [number, number][];
   video?: Blob;
   camera?: Blob;
   music?: Blob;
@@ -255,6 +269,36 @@ declare global {
       onCommand: (
         cb: (command: "pause" | "resume" | "stop" | "discard") => void,
       ) => () => void;
+      native: {
+        available: () => Promise<boolean>;
+        start: (options: {
+          fps: number;
+          audio: boolean;
+          region?: { x: number; y: number; width: number; height: number };
+        }) => Promise<{
+          folder: string;
+          videoUrl: string;
+          width: number;
+          height: number;
+        }>;
+        command: (name: "begin" | "pause" | "resume" | "stop") => Promise<void>;
+        events: (folder: string) => Promise<string>;
+        onEvent: (
+          cb: (message: {
+            event: string;
+            seconds?: number;
+            paused?: boolean;
+            audio?: boolean;
+            reason?: string;
+            message?: string;
+          }) => void,
+        ) => () => void;
+        recoveries: () => Promise<
+          { folder: string; name: string; videoUrl: string; created?: string }[]
+        >;
+        recovered: (folder: string) => Promise<void>;
+        saveProject: (folder: string, json: string) => Promise<void>;
+      };
       exportFile: {
         open: (
           name: string,

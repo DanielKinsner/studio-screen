@@ -78,6 +78,8 @@ import {
 } from "./timeline";
 import { dimensions, renderFrame } from "./compositor";
 import { exportProject, type ExportFormat } from "./exporter";
+import { nativeCapture } from "./nativeCapture";
+import { parseEvents } from "./nativeEvents";
 import { capture, getDuration, loadVideo, releaseVideo } from "./media";
 import {
   deleteProject,
@@ -197,7 +199,7 @@ export default function App() {
     height: 0.8,
   });
   const [systemAudio, setSystemAudio] = useState(true);
-  const [recordFps, setRecordFps] = useState(30);
+  const [recordFps, setRecordFps] = useState(60);
   const [recording, setRecording] = useState(false);
   const [recordPaused, setRecordPaused] = useState(false);
   const [recordTime, setRecordTime] = useState(0);
@@ -224,7 +226,12 @@ export default function App() {
   const video = useRef<HTMLVideoElement | null>(null);
   const music = useRef<HTMLVideoElement | null>(null);
   const background = useRef<HTMLImageElement | null>(null);
-  const captureRef = useRef<Awaited<ReturnType<typeof capture>> | null>(null);
+  const captureRef = useRef<{
+    stop: () => void;
+    pause: () => void;
+    resume: () => void;
+    elapsed: () => number;
+  } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const fileInput = useRef<HTMLInputElement>(null),
     imageInput = useRef<HTMLInputElement>(null),
@@ -301,6 +308,7 @@ export default function App() {
           setProject(latest);
           seekTo(latest.trimStart);
         }
+        return recover(items);
       })
       .catch(() =>
         notify(
@@ -318,6 +326,12 @@ export default function App() {
     if (!ready) return;
     setSaved("Saving…");
     const timer = setTimeout(() => {
+      // Native recordings also keep their edit next to the footage on disk.
+      if (project.folder && window.studioDesktop)
+        void window.studioDesktop.native.saveProject(
+          project.folder,
+          JSON.stringify({ ...project, format: "studio-screen", version: 2 }),
+        );
       saveProject(project)
         .then(() => setSaved("Saved locally"))
         .catch(() => {
@@ -339,8 +353,9 @@ export default function App() {
     let loaded: HTMLVideoElement | null = null;
     setPlaying(false);
     video.current = null;
-    if (project.video)
-      loadVideo(project.video)
+    const media = project.video || project.videoUrl;
+    if (media)
+      loadVideo(media)
         .then((v) => {
           loaded = v;
           if (!alive) return releaseVideo(v);
@@ -354,7 +369,7 @@ export default function App() {
       releaseVideo(loaded);
       if (video.current === loaded) video.current = null;
     };
-  }, [project.video, notify]);
+  }, [project.video, project.videoUrl, notify]);
   useEffect(() => {
     let alive = true;
     let loaded: HTMLVideoElement | null = null;
@@ -669,69 +684,156 @@ export default function App() {
       }
     }
   }
+  /** Build a project from a recording folder the app never opened (crash or close). */
+  async function recover(existing: Project[]) {
+    const desktop = window.studioDesktop;
+    if (!desktop) return;
+    const found = (await desktop.native.recoveries()).filter(
+      (r) => !existing.some((p) => p.folder === r.folder),
+    );
+    let opened: Project | undefined;
+    for (const item of found) {
+      try {
+        const v = await loadVideo(item.videoUrl);
+        let duration: number;
+        try {
+          duration = await getDuration(v);
+        } finally {
+          releaseVideo(v);
+        }
+        const { points, activity } = parseEvents(
+          await desktop.native.events(item.folder),
+        );
+        const p = newProject(false);
+        p.name = `Recovered · ${item.name}`;
+        p.capture = "native";
+        p.folder = item.folder;
+        p.videoUrl = item.videoUrl;
+        p.duration = duration;
+        p.trimEnd = duration;
+        p.points = points;
+        p.activity = activity;
+        await saveProject(p);
+        await desktop.native.recovered(item.folder);
+        opened = p;
+      } catch {
+        // Unreadable leftovers stay on disk untouched.
+      }
+    }
+    if (opened) {
+      openProject(opened);
+      notify("Recovered a recording that didn't finish. It's open and saved.");
+    }
+  }
   async function startRecord() {
     const desktop = window.studioDesktop;
     let barShown = false;
     setBusy(true);
     discardRef.current = false;
+    // Desktop: get out of the way and count in before the first recorded frame.
+    const beforeStart = desktop
+      ? async () => {
+          barShown = true;
+          setModal(null);
+          await desktop.recordingUi({
+            phase: "countdown",
+            seconds: countdown ? 3 : 0,
+          });
+        }
+      : undefined;
     try {
-      if (!navigator.mediaDevices?.getDisplayMedia)
+      if (desktop) {
+        if (!source) throw new Error("Choose a screen or window first.");
+        await desktop.selectSource(source);
+      }
+      const native = !!desktop && (await desktop.native.available());
+      if (!native && !navigator.mediaDevices?.getDisplayMedia)
         throw new Error(
           "Screen capture needs the desktop app or Chrome/Edge on localhost or HTTPS.",
         );
-      if (window.studioDesktop) {
-        if (!source) throw new Error("Choose a screen or window first.");
-        await window.studioDesktop.selectSource(source);
-      }
-      const control = await capture({
+      const options = {
         system: systemAudio,
         fps: recordFps,
         region: regionEnabled ? region : undefined,
-        // Desktop: the screen is shared, so get out of the way and count in
-        // before the first recorded frame.
-        beforeStart: desktop
-          ? async () => {
-              barShown = true;
-              setModal(null);
-              await desktop.recordingUi({
-                phase: "countdown",
-                seconds: countdown ? 3 : 0,
-              });
-            }
-          : undefined,
-      });
-      captureRef.current = control;
+        beforeStart,
+      };
+      let finished: Promise<{
+        duration: number;
+        points: Project["points"];
+        hasSystemAudio: boolean;
+        apply: (p: Project) => void;
+        reason?: string;
+      }>;
+      if (native) {
+        const control = await nativeCapture(options);
+        captureRef.current = control;
+        finished = control.done.then((r) => ({
+          ...r,
+          apply: (p) => {
+            p.capture = "native";
+            p.folder = r.folder;
+            p.videoUrl = r.videoUrl;
+            p.activity = r.activity;
+          },
+        }));
+      } else {
+        const control = await capture(options);
+        captureRef.current = control;
+        if (desktop)
+          notify(
+            "Using browser capture: the Windows cursor will be baked into this recording.",
+          );
+        finished = control.done.then((r) => {
+          if (!r.video.size)
+            throw new Error(
+              "The recording was too short. Record for at least a second.",
+            );
+          return {
+            ...r,
+            apply: (p) => {
+              p.capture = "legacy";
+              p.video = r.video;
+              p.settings.showCursor = false;
+            },
+          };
+        });
+      }
       setModal(null);
       setRecording(true);
       setRecordPaused(false);
       setRecordTime(0);
       setBusy(false);
       if (desktop) void desktop.recordingUi({ phase: "recording", notes });
-      const result = await control.done;
+      const result = await finished;
       setRecording(false);
       captureRef.current = null;
       if (discardRef.current) {
         notify("Take discarded. Ready when you are.");
         return;
       }
-      if (result.duration < 0.2 || !result.video.size)
+      if (result.duration < 0.2)
         throw new Error(
           "The recording was too short. Record for at least a second.",
         );
       const p = newProject(false);
       p.name = `Recording · ${new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
-      p.video = result.video;
+      result.apply(p);
       p.duration = result.duration;
       p.trimEnd = result.duration;
       p.points = result.points;
       openProject(p);
       notify(
-        systemAudio && !result.hasSystemAudio
-          ? "Recording ready. The selected source did not provide system audio."
-          : "Recording ready. Make it your own.",
+        result.reason === "window-closed"
+          ? "The window you were recording closed, so the take ended there."
+          : result.reason === "interrupted"
+            ? "Recording stopped unexpectedly; everything up to that moment is kept."
+            : systemAudio && !result.hasSystemAudio
+              ? "Recording ready. The selected source did not provide system audio."
+              : "Recording ready. Make it your own.",
       );
     } catch (e) {
       setRecording(false);
+      captureRef.current = null;
       notify(
         (e as Error).name === "NotAllowedError"
           ? "Capture cancelled or permission denied. You can try again or import a video."

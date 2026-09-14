@@ -25,6 +25,7 @@ async function record({ unprotected }) {
       ...process.env,
       STUDIO_TEST_MARKER: "1",
       STUDIO_USER_DATA: path.join(root, "tests/.profile"),
+      STUDIO_PROJECTS_DIR: path.join(root, "tests/.projects"),
       ...(unprotected ? { STUDIO_TEST_UNPROTECTED: "1" } : {}),
     },
   });
@@ -120,17 +121,19 @@ async function record({ unprotected }) {
         r.onerror = rej;
       });
       const p = projects.sort((a, b) => b.updated - a.updated)[0];
+      // Native recordings stay on disk; browser-capture ones live in the database.
+      if (p.folder) return { folder: p.folder };
       return await new Promise((res) => {
         const reader = new FileReader();
-        reader.onload = () => res(reader.result);
+        reader.onload = () => res({ data: reader.result });
         reader.readAsDataURL(p.video);
       });
     });
-    const file = path.join(
-      root,
-      `tests/a2-${unprotected ? "control" : "protected"}.webm`,
-    );
-    await fs.writeFile(file, Buffer.from(data.split(";base64,")[1], "base64"));
+    const file = data.folder
+      ? path.join(data.folder, "recording.mp4")
+      : path.join(root, `tests/a2-${unprotected ? "control" : "protected"}.webm`);
+    if (!data.folder)
+      await fs.writeFile(file, Buffer.from(data.data.split(";base64,")[1], "base64"));
     return {
       file,
       errors,

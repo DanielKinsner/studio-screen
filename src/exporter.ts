@@ -11,6 +11,7 @@ import {
   QUALITY_HIGH,
   QUALITY_VERY_HIGH,
   StreamTarget,
+  UrlSource,
   VideoSampleSink,
   WebMOutputFormat,
   canEncodeAudio,
@@ -133,8 +134,13 @@ export async function exportProject(
   const frames = Math.max(1, Math.round(total * fps));
   const canvas = document.createElement("canvas");
   Object.assign(canvas, dimensions(p.settings.aspect, options.height));
-  const input = p.video
-    ? new Input({ source: new BlobSource(p.video), formats: ALL_FORMATS })
+  const source = p.video
+    ? new BlobSource(p.video)
+    : p.videoUrl
+      ? new UrlSource(p.videoUrl)
+      : undefined;
+  const input = source
+    ? new Input({ source, formats: ALL_FORMATS })
     : undefined;
   const background = await loadImage(p.backgroundImage);
   let output: Output | undefined;

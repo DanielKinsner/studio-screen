@@ -8,13 +8,15 @@ const {
   globalShortcut,
   dialog,
   shell,
+  protocol,
 } = require("electron");
+const { Readable } = require("node:stream");
 const { randomUUID } = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { spawn } = require("node:child_process");
-let mainWindow, selectedSource, tracking, pointerTimer;
+let mainWindow, selectedSource, pointerTimer, helper;
 let barWindow, countdownWindow, recordingDisplay;
 const dev = process.argv.includes("--dev");
 // Automated tests run against a throwaway profile so they never touch the real
@@ -81,6 +83,107 @@ async function uniquePath(dir, name, extension) {
     }
   }
 }
+
+// Recordings live in one folder each; tests point this somewhere disposable.
+const projectsDir = () =>
+  process.env.STUDIO_PROJECTS_DIR
+    ? path.resolve(process.env.STUDIO_PROJECTS_DIR)
+    : path.join(app.getPath("videos"), "Studio Screen");
+const inside = (file, dir) => {
+  const relative = path.relative(dir, path.resolve(file));
+  return !!relative && !relative.startsWith("..") && !path.isAbsolute(relative);
+};
+function helperPath() {
+  const file = app.isPackaged
+    ? path.join(process.resourcesPath, "studio-capture.exe")
+    : path.join(
+        __dirname,
+        "../native/studio-capture/target/release/studio-capture.exe",
+      );
+  return process.platform === "win32" && fs.existsSync(file) ? file : null;
+}
+const stamp = (date) => {
+  const two = (n) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())} ${two(date.getHours())}.${two(date.getMinutes())}.${two(date.getSeconds())}`;
+};
+async function writeMeta(folder, patch) {
+  const file = path.join(folder, "meta.json");
+  let meta = {};
+  try {
+    meta = JSON.parse(await fs.promises.readFile(file, "utf8"));
+  } catch {}
+  await fs.promises.writeFile(
+    file,
+    JSON.stringify({ ...meta, ...patch }, null, 2),
+  );
+}
+// Serves recordings to the editor with byte ranges, so partly written or
+// crash-cut fragmented MP4s still report their duration and seek.
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: "studio-media",
+    privileges: {
+      standard: true,
+      secure: true,
+      stream: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+    },
+  },
+]);
+async function serveMedia(request) {
+  const cors = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "Range",
+    "Access-Control-Expose-Headers":
+      "Content-Range, Content-Length, Accept-Ranges",
+  };
+  if (request.method === "OPTIONS")
+    return new Response(null, { status: 204, headers: cors });
+  const file = path.resolve(
+    decodeURIComponent(new URL(request.url).pathname.slice(1)),
+  );
+  if (!inside(file, projectsDir()))
+    return new Response("Forbidden", { status: 403, headers: cors });
+  const stat = await fs.promises.stat(file).catch(() => null);
+  if (!stat?.isFile())
+    return new Response("Not found", { status: 404, headers: cors });
+  const type = file.endsWith(".mp4")
+    ? "video/mp4"
+    : file.endsWith(".json") || file.endsWith(".jsonl")
+      ? "application/json"
+      : "application/octet-stream";
+  const headers = { ...cors, "Content-Type": type, "Accept-Ranges": "bytes" };
+  const range = /bytes=(\d*)-(\d*)/.exec(request.headers.get("range") || "");
+  if (range && stat.size > 0) {
+    let start = range[1]
+      ? Number(range[1])
+      : Math.max(0, stat.size - Number(range[2]));
+    let end = range[1] && range[2] ? Number(range[2]) : stat.size - 1;
+    end = Math.min(end, stat.size - 1);
+    if (start > end)
+      return new Response(null, {
+        status: 416,
+        headers: { ...headers, "Content-Range": `bytes */${stat.size}` },
+      });
+    return new Response(
+      Readable.toWeb(fs.createReadStream(file, { start, end })),
+      {
+        status: 206,
+        headers: {
+          ...headers,
+          "Content-Range": `bytes ${start}-${end}/${stat.size}`,
+          "Content-Length": String(end - start + 1),
+        },
+      },
+    );
+  }
+  return new Response(Readable.toWeb(fs.createReadStream(file)), {
+    status: 200,
+    headers: { ...headers, "Content-Length": String(stat.size) },
+  });
+}
+const mediaUrl = (file) => `studio-media://media/${encodeURIComponent(file)}`;
 
 function loadView(win, view) {
   if (dev) return win.loadURL(`http://127.0.0.1:5173/#${view}`);
@@ -201,10 +304,6 @@ function closeRecordingUi() {
 }
 
 function stopTracking() {
-  if (tracking) {
-    tracking.kill();
-    tracking = undefined;
-  }
   if (pointerTimer) clearInterval(pointerTimer);
   pointerTimer = undefined;
 }
@@ -222,6 +321,7 @@ function sendPoint(x, y, click, bounds, shortcut, typing) {
   });
 }
 app.whenReady().then(() => {
+  protocol.handle("studio-media", serveMedia);
   // Electron bounds are device-independent pixels; Windows applies the monitor DPI.
   const { workArea } = screen.getDisplayNearestPoint(
     screen.getCursorScreenPoint(),
@@ -409,76 +509,197 @@ app.whenReady().then(() => {
     const display = screen.getDisplayMatching(barWindow.getBounds());
     barWindow.setBounds(barBounds(display, !!expanded));
   });
+  // Browser-capture fallback only: pointer position polling (no clicks or
+  // keys). Native recordings get full input events from the capture helper.
   ipcMain.handle("studio:track", async (event, enabled) => {
     assertSender(event);
     stopTracking();
     if (enabled !== true || !selectedSource) return;
-    const handle = /^window:(\d+):/.exec(selectedSource.id)?.[1];
-    if (handle && process.platform !== "win32") return;
     const display = screen
       .getAllDisplays()
       .find((d) => String(d.id) === selectedSource.display_id);
-    if (!display && !handle) return;
-    const bounds = display?.bounds;
-    if (process.platform === "win32") {
-      const trackerPath = app.isPackaged
-        ? path.join(
-            process.resourcesPath,
-            "app.asar.unpacked",
-            "electron",
-            "pointer.ps1",
-          )
-        : path.join(__dirname, "pointer.ps1");
-      tracking = spawn(
-        "powershell.exe",
-        [
-          "-NoProfile",
-          "-NonInteractive",
-          "-ExecutionPolicy",
-          "Bypass",
-          "-File",
-          trackerPath,
-          "-WindowHandle",
-          handle || "0",
-        ],
-        { windowsHide: true, stdio: ["ignore", "pipe", "ignore"] },
-      );
-      let buffer = "";
-      tracking.stdout.on("data", (data) => {
-        buffer += data.toString();
+    if (!display) return;
+    pointerTimer = setInterval(() => {
+      const pt = screen.getCursorScreenPoint();
+      sendPoint(pt.x, pt.y, false, display.bounds);
+    }, 16);
+  });
+
+  ipcMain.handle("studio:native-available", (event) => {
+    assertSender(event);
+    return !!helperPath() && process.env.STUDIO_DISABLE_NATIVE !== "1";
+  });
+  ipcMain.handle("studio:native-start", async (event, options) => {
+    assertSender(event);
+    const exe = helperPath();
+    if (!exe) throw new Error("The capture helper is not installed.");
+    if (helper) throw new Error("A recording is already running.");
+    if (!selectedSource) throw new Error("Choose a screen or window first.");
+    const folder = path.join(projectsDir(), stamp(new Date()));
+    await fs.promises.mkdir(folder, { recursive: true });
+    const video = path.join(folder, "recording.mp4");
+    const events = path.join(folder, "events.jsonl");
+    const config = {
+      output: video,
+      events,
+      fps: Math.max(10, Math.min(60, Math.round(+options?.fps || 60))),
+      audio: options?.audio !== false,
+      armed: true,
+      cursor: process.env.STUDIO_TEST_CAPTURE_CURSOR === "1",
+    };
+    const region = options?.region;
+    if (
+      region &&
+      [region.x, region.y, region.width, region.height].every(Number.isFinite)
+    )
+      config.region = {
+        x: region.x,
+        y: region.y,
+        width: region.width,
+        height: region.height,
+      };
+    const hwnd = /^window:(\d+):/.exec(selectedSource.id)?.[1];
+    if (hwnd) config.window = Number(hwnd);
+    else {
+      const display = displayForSource();
+      const centre = screen.dipToScreenPoint({
+        x: display.bounds.x + display.bounds.width / 2,
+        y: display.bounds.y + display.bounds.height / 2,
+      });
+      config.monitor = { x: Math.round(centre.x), y: Math.round(centre.y) };
+    }
+    await writeMeta(folder, {
+      version: 1,
+      status: "recording",
+      created: new Date().toISOString(),
+      source: selectedSource.name,
+      fps: config.fps,
+      video: "recording.mp4",
+      events: "events.jsonl",
+    });
+    const child = spawn(exe, ["record", JSON.stringify(config)], {
+      windowsHide: true,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    const current = (helper = { child, folder, stopped: false });
+    const send = (message) => {
+      if (mainWindow && !mainWindow.isDestroyed())
+        mainWindow.webContents.send("studio:native-event", message);
+    };
+    return await new Promise((resolve, reject) => {
+      let ready = false,
+        buffer = "",
+        errorText = "";
+      child.stdout.on("data", (chunk) => {
+        buffer += chunk.toString();
         let index;
         while ((index = buffer.indexOf("\n")) >= 0) {
           const line = buffer.slice(0, index).trim();
           buffer = buffer.slice(index + 1);
+          let message;
           try {
-            const [x, y, click, shortcut, typing, left, top, width, height] =
-              JSON.parse(line);
-            if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-            if (handle) {
-              if (width > 0 && height > 0)
-                sendPoint(
-                  x,
-                  y,
-                  !!click,
-                  { x: left, y: top, width, height },
-                  shortcut,
-                  typing,
-                );
-            } else {
-              const dip = screen.screenToDipPoint({ x, y });
-              sendPoint(dip.x, dip.y, !!click, bounds, shortcut, typing);
-            }
-          } catch {}
+            message = JSON.parse(line);
+          } catch {
+            continue;
+          }
+          if (message.event === "ready" && !ready) {
+            ready = true;
+            resolve({
+              folder,
+              videoUrl: mediaUrl(video),
+              width: message.width,
+              height: message.height,
+            });
+          } else if (message.event === "error") {
+            errorText = message.message;
+            if (!ready) reject(new Error(message.message));
+          } else if (message.event === "started") {
+            void writeMeta(folder, {
+              width: message.width,
+              height: message.height,
+              audio: message.audio,
+            });
+          } else if (message.event === "stopped") {
+            current.stopped = true;
+            void writeMeta(folder, {
+              status: "done",
+              duration: message.seconds,
+              reason: message.reason,
+            });
+          }
+          send(message);
         }
       });
-      tracking.on("error", () => {
-        tracking = undefined;
+      child.stderr.on("data", (chunk) => (errorText += chunk.toString()));
+      child.on("error", (e) => {
+        if (!ready) reject(e);
       });
-    } else
-      pointerTimer = setInterval(() => {
-        const pt = screen.getCursorScreenPoint();
-        sendPoint(pt.x, pt.y, false, bounds);
-      }, 33);
+      child.on("exit", (code) => {
+        if (helper === current) helper = undefined;
+        if (!ready)
+          reject(
+            new Error(
+              errorText.trim() || `The capture helper stopped (code ${code}).`,
+            ),
+          );
+        else if (!current.stopped) {
+          void writeMeta(folder, { status: "interrupted" });
+          send({ event: "exit", code, message: errorText.trim() });
+        }
+      });
+    });
+  });
+  ipcMain.handle("studio:native-command", (event, command) => {
+    assertSender(event);
+    if (helper && ["begin", "pause", "resume", "stop"].includes(command))
+      helper.child.stdin.write(command + "\n");
+  });
+  ipcMain.handle("studio:native-events", async (event, folder) => {
+    assertSender(event);
+    const file = path.join(String(folder), "events.jsonl");
+    if (!inside(file, projectsDir()))
+      throw new Error("Invalid recording folder.");
+    return fs.promises.readFile(file, "utf8").catch(() => "");
+  });
+  // Recordings the app never got to open: it closed or crashed mid-take.
+  ipcMain.handle("studio:recoveries", async (event) => {
+    assertSender(event);
+    const dir = projectsDir();
+    const entries = await fs.promises
+      .readdir(dir, { withFileTypes: true })
+      .catch(() => []);
+    const found = [];
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const folder = path.join(dir, entry.name);
+      if (helper?.folder === folder) continue;
+      try {
+        const meta = JSON.parse(
+          await fs.promises.readFile(path.join(folder, "meta.json"), "utf8"),
+        );
+        if (!["recording", "interrupted"].includes(meta.status)) continue;
+        const stat = await fs.promises.stat(path.join(folder, "recording.mp4"));
+        if (stat.size > 0)
+          found.push({
+            folder,
+            name: entry.name,
+            videoUrl: mediaUrl(path.join(folder, "recording.mp4")),
+            created: meta.created,
+          });
+      } catch {}
+    }
+    return found;
+  });
+  ipcMain.handle("studio:recovery-done", async (event, folder) => {
+    assertSender(event);
+    if (!inside(path.join(String(folder), "meta.json"), projectsDir())) return;
+    await writeMeta(String(folder), { status: "recovered" });
+  });
+  ipcMain.handle("studio:project-save", async (event, folder, json) => {
+    assertSender(event);
+    const file = path.join(String(folder), "project.json");
+    if (!inside(file, projectsDir()) || typeof json !== "string") return;
+    await fs.promises.writeFile(file, json).catch(() => {});
   });
   globalShortcut.register("CommandOrControl+Shift+R", () => {
     if (mainWindow && !mainWindow.isDestroyed())
@@ -486,6 +707,8 @@ app.whenReady().then(() => {
   });
   mainWindow.on("closed", () => {
     stopTracking();
+    // Finish any take in progress cleanly before the app goes away.
+    helper?.child.stdin.write("stop\n");
     closeRecordingUi();
     mainWindow = undefined;
   });

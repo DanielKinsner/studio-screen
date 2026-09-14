@@ -15,9 +15,13 @@ export function videoMime(format: string) {
       typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(m),
   );
 }
-export async function loadVideo(blob: Blob) {
+export async function loadVideo(source: Blob | string) {
   const v = document.createElement("video");
-  v.src = URL.createObjectURL(blob);
+  if (typeof source === "string") {
+    // Recordings on disk: CORS keeps canvases untainted for 3D and export.
+    v.crossOrigin = "anonymous";
+    v.src = source;
+  } else v.src = URL.createObjectURL(source);
   v.playsInline = true;
   v.preload = "auto";
   await new Promise<void>((resolve, reject) => {
@@ -32,7 +36,7 @@ export async function loadVideo(blob: Blob) {
 export function releaseVideo(v?: HTMLVideoElement | null) {
   if (v) {
     v.pause();
-    URL.revokeObjectURL(v.src);
+    if (v.src.startsWith("blob:")) URL.revokeObjectURL(v.src);
     v.removeAttribute("src");
     v.load();
   }

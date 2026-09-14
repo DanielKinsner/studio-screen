@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { newProject, type Point } from "./types";
 import {
   clickAt,
+  cursorShapeAt,
   cursorOpacity,
   pointerAt,
   shortcutAt,
@@ -144,5 +145,16 @@ describe("Cursor lookups", () => {
     const p = newProject();
     expect(clickAt(p, 5.2)).toBe(5);
     expect(shortcutAt(p, 6.5)?.shortcut).toBe("Ctrl + K");
+  });
+  it("follows the recorded cursor shape", () => {
+    const p = recorded([
+      { t: 0, x: 0.1, y: 0.1 },
+      { t: 1, x: 0.2, y: 0.2, cursor: "text" },
+      { t: 2, x: 0.3, y: 0.3, cursor: "pointer" },
+      { t: 3, x: 0.3, y: 0.3 },
+    ]);
+    expect(cursorShapeAt(p, 0.5)).toBe("arrow");
+    expect(cursorShapeAt(p, 1.5)).toBe("text");
+    expect(cursorShapeAt(p, 2.5)).toBe("pointer");
   });
 });

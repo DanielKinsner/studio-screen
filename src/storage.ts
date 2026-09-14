@@ -3,6 +3,10 @@ import type { Project } from "./types";
 import { cameraFeel, defaults } from "./types";
 export function migrateProject(p: Project): Project {
   const saved = cleanSettings(p.settings);
+  // Footage captured before the capture helper has the Windows cursor baked
+  // in, so the drawn cursor starts off to avoid showing two.
+  const legacy = !p.capture && !p.demo && !!(p.video || p.videoUrl);
+  if (legacy) saved.showCursor = false;
   // Projects saved before the spring camera only know their movement style.
   const feel =
     cameraFeel[saved.motionEase as keyof typeof cameraFeel] ??
@@ -15,6 +19,7 @@ export function migrateProject(p: Project): Project {
       cameraBounce: feel.bounce,
       ...saved,
     },
+    capture: legacy ? "legacy" : p.capture,
     speeds: p.speeds || [],
     hiddenCursor: p.hiddenCursor || [],
     dismissedZooms: p.dismissedZooms || [],
@@ -72,14 +77,23 @@ export async function projectFile(p: Project) {
     format: "studio-screen",
     version: 2,
   };
+  // A recording streamed from disk travels inside the file like any other.
+  const media = {
+    ...p,
+    video:
+      p.video ??
+      (p.videoUrl ? await (await fetch(p.videoUrl)).blob() : undefined),
+  };
+  delete encoded.videoUrl;
+  delete encoded.folder;
   for (const key of ["video", "camera", "music", "backgroundImage"] as const) {
-    if (p[key])
+    if (media[key])
       encoded[key] = await new Promise<string>((res, rej) => {
         const r = new FileReader();
         r.onload = () => res(r.result as string);
         r.onerror = rej;
         r.readAsDataURL(
-          new Blob([p[key]!], { type: p[key]!.type.split(";")[0] }),
+          new Blob([media[key]!], { type: media[key]!.type.split(";")[0] }),
         );
       });
   }

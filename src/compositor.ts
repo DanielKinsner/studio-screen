@@ -4,6 +4,7 @@ import { clamp } from "./timeline";
 import {
   cameraAt,
   clickAt,
+  cursorShapeAt,
   cursorOpacity,
   smoothPointer,
   shortcutAt,
@@ -340,8 +341,13 @@ function drawScreen(
   c.scale(scale, scale);
   if (source && (p.demo || frame || (media.video?.readyState || 0) >= 2))
     c.drawImage(source, 0, 0, fw, fh);
-  if (s.showCursor && (p.demo || p.points.length)) {
-    const point = smoothPointer(p, t);
+  const point =
+    s.showCursor && (p.demo || p.points.length) ? smoothPointer(p, t) : null;
+  const shape = point ? cursorShapeAt(p, t) : "hidden";
+  // The pointer left the recorded area (another monitor or outside the window).
+  const outside =
+    !!point && (point.x < 0 || point.x > 1 || point.y < 0 || point.y > 1);
+  if (point && !outside && shape !== "hidden") {
     c.save();
     c.globalAlpha = cursorOpacity(p, t);
     c.translate(point.x * fw, point.y * fh);
@@ -360,14 +366,52 @@ function drawScreen(
     c.scale(cs, cs);
     c.rotate((s.cursorAngle * Math.PI) / 180);
     c.beginPath();
-    c.moveTo(0, 0);
-    c.lineTo(0, 21);
-    c.lineTo(5.7, 15.5);
-    c.lineTo(10.2, 25);
-    c.lineTo(14.4, 23);
-    c.lineTo(10, 14);
-    c.lineTo(18, 14);
-    c.closePath();
+    if (shape === "text") {
+      // I-beam, centred on the hotspot.
+      c.moveTo(-4, -11);
+      c.lineTo(-1.2, -9.5);
+      c.lineTo(1.2, -9.5);
+      c.lineTo(4, -11);
+      c.lineTo(4, -8.5);
+      c.lineTo(1.2, -7.5);
+      c.lineTo(1.2, 7.5);
+      c.lineTo(4, 8.5);
+      c.lineTo(4, 11);
+      c.lineTo(1.2, 9.5);
+      c.lineTo(-1.2, 9.5);
+      c.lineTo(-4, 11);
+      c.lineTo(-4, 8.5);
+      c.lineTo(-1.2, 7.5);
+      c.lineTo(-1.2, -7.5);
+      c.lineTo(-4, -8.5);
+      c.closePath();
+    } else if (shape === "pointer") {
+      // Pointing hand; the hotspot is the fingertip.
+      c.moveTo(-1, 0);
+      c.quadraticCurveTo(-1, -2.2, 1.2, -2.2);
+      c.quadraticCurveTo(3.4, -2.2, 3.4, 0);
+      c.lineTo(3.4, 9);
+      c.quadraticCurveTo(5.8, 7.4, 7.2, 8.6);
+      c.quadraticCurveTo(9.8, 7.6, 11, 9.4);
+      c.quadraticCurveTo(13.6, 8.8, 14.2, 11);
+      c.lineTo(14.2, 18);
+      c.quadraticCurveTo(14.2, 24, 9, 25);
+      c.lineTo(4, 25);
+      c.quadraticCurveTo(1.4, 24.6, -0.4, 21.6);
+      c.lineTo(-4.6, 14.6);
+      c.quadraticCurveTo(-5.6, 12.4, -3.8, 11.8);
+      c.quadraticCurveTo(-2.4, 11.4, -1, 13.4);
+      c.closePath();
+    } else {
+      c.moveTo(0, 0);
+      c.lineTo(0, 21);
+      c.lineTo(5.7, 15.5);
+      c.lineTo(10.2, 25);
+      c.lineTo(14.4, 23);
+      c.lineTo(10, 14);
+      c.lineTo(18, 14);
+      c.closePath();
+    }
     if (s.cursorStyle === "dot") {
       c.beginPath();
       c.arc(0, 0, 6, 0, Math.PI * 2);

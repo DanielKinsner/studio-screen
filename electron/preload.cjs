@@ -12,6 +12,17 @@ contextBridge.exposeInMainWorld("studioDesktop", {
   onStop: (callback) => listen("studio:stop", callback),
   recordingUi: (state) => ipcRenderer.invoke("studio:recording-ui", state),
   onCommand: (callback) => listen("studio:command", callback),
+  native: {
+    available: () => ipcRenderer.invoke("studio:native-available"),
+    start: (options) => ipcRenderer.invoke("studio:native-start", options),
+    command: (name) => ipcRenderer.invoke("studio:native-command", name),
+    events: (folder) => ipcRenderer.invoke("studio:native-events", folder),
+    onEvent: (callback) => listen("studio:native-event", callback),
+    recoveries: () => ipcRenderer.invoke("studio:recoveries"),
+    recovered: (folder) => ipcRenderer.invoke("studio:recovery-done", folder),
+    saveProject: (folder, json) =>
+      ipcRenderer.invoke("studio:project-save", folder, json),
+  },
   exportFile: {
     open: (name, extension) =>
       ipcRenderer.invoke("studio:export-open", name, extension),
