@@ -60,8 +60,10 @@ await new Promise((resolve) => {
     if (String(d).includes('"started"')) resolve();
   });
 });
+await page.bringToFront();
 await page.waitForTimeout(800);
-for (let i = 0; i < 5; i++) {
+// Six plays; the first warms up the decoder and audio device and is ignored.
+for (let i = 0; i < 6; i++) {
   await page.evaluate(() => {
     const v = document.getElementById("v");
     v.currentTime = 0;
@@ -110,6 +112,7 @@ for (let i = 0; i + 240 < samples.length; i += 48) {
   loud = on;
 }
 const offsets = flashes
+  .slice(1)
   .map((t) => {
     const tone = tones.find((s) => Math.abs(s - t) < 0.3);
     return tone === undefined ? null : Math.round((tone - t) * 1000);

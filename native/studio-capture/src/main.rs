@@ -371,9 +371,12 @@ fn record(config: Config) -> Result<()> {
                     }
                     audio_next = time + encoder.write_audio(&pcm, time)?;
                 }
-                // Loopback goes quiet when nothing plays: keep the track moving.
-                if now - audio_next > 1_000_000 {
-                    let frames = ((now - 500_000 - audio_next) * 48000 / 10_000_000) as usize;
+                // Loopback delivers nothing while no app plays sound: keep the
+                // track moving, but only after a clear half second of quiet so
+                // late-arriving real audio is never overwritten.
+                let heard = now + audio_offset;
+                if heard - audio_next > 5_000_000 {
+                    let frames = ((heard - 3_000_000 - audio_next) * 48000 / 10_000_000) as usize;
                     audio_next += encoder.write_audio(&vec![0u8; frames * 4], audio_next)?;
                 }
             }
