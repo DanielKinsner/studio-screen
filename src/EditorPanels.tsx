@@ -257,7 +257,7 @@ export function CursorPanel({
   edit,
   notify,
   time,
-}: { time: number } & PanelProps) {
+}: { time: () => number } & PanelProps) {
   const s = p.settings;
   const set = (value: Partial<Settings>) =>
     edit((p) => ({ ...p, settings: { ...p.settings, ...value } }));
@@ -327,7 +327,7 @@ export function CursorPanel({
       <button
         className="button full-width"
         onClick={() => {
-          const start = Math.min(time, p.trimEnd - 0.1);
+          const start = Math.min(time(), p.trimEnd - 0.1);
           edit((p) => ({
             ...p,
             hiddenCursor: [
@@ -486,7 +486,7 @@ export function TimelineEdits({
   selected,
   onSelect,
 }: {
-  time: number;
+  time: () => number;
   selected: string | null;
   onSelect: (id: string) => void;
 } & PanelProps) {
@@ -504,7 +504,7 @@ export function TimelineEdits({
         className="button full-width"
         onClick={() => {
           const id = crypto.randomUUID(),
-            start = Math.min(time, p.trimEnd - 0.1);
+            start = Math.min(time(), p.trimEnd - 0.1);
           edit((p) => ({
             ...p,
             speeds: [

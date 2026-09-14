@@ -1,7 +1,13 @@
 import TimelineClip from "./TimelineClip";
 import { usePreviewSize } from "./usePreviewSize";
 import { fadeAt, clickEvents, playClick } from "./sound";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import type { ReactNode } from "react";
 import {
   ArrowDownToLine,
@@ -224,8 +230,19 @@ export default function App() {
     future = useRef<Project[]>([]);
   const stateRef = useRef(project);
   stateRef.current = project;
+  // The live playhead. While playing, the animation loop owns it and draws
+  // every frame itself; `time` state catches up when playback stops. Every
+  // jump elsewhere goes through seekTo so the two never disagree.
   const tRef = useRef(time);
-  tRef.current = time;
+  const playingRef = useRef(playing);
+  playingRef.current = playing;
+  const playheadRef = useRef<HTMLDivElement>(null);
+  const timeTextRef = useRef<HTMLOutputElement>(null);
+  const currentTime = useCallback(() => tRef.current, []);
+  const seekTo = useCallback((t: number) => {
+    tRef.current = t;
+    setTime(t);
+  }, []);
   const s = project.settings;
   const previewSize = usePreviewSize(canvas, s.aspect);
   const duration = outputDuration(project);
@@ -267,7 +284,7 @@ export default function App() {
     future.current = [];
     setSelected(null);
     setProject(p);
-    setTime(p.trimStart);
+    seekTo(p.trimStart);
     setModal(null);
   };
   useEffect(() => {
@@ -278,7 +295,7 @@ export default function App() {
         const latest = items.sort((a, b) => b.updated - a.updated)[0];
         if (latest) {
           setProject(latest);
-          setTime(latest.trimStart);
+          seekTo(latest.trimStart);
         }
       })
       .catch(() =>
@@ -374,6 +391,7 @@ export default function App() {
       canvas.current.height !== previewSize.height
     )
       Object.assign(canvas.current, previewSize);
+    if (playingRef.current) return;
     try {
       renderFrame(canvas.current, project, time, {
         video: video.current,
@@ -393,33 +411,62 @@ export default function App() {
       v.onseeked = () => setMediaVersion((n) => n + 1);
     }
   }, [time, playing, mediaVersion]);
+  useLayoutEffect(() => {
+    if (playing) return;
+    if (timeTextRef.current)
+      timeTextRef.current.textContent = timecode(outputTimeAt(project, time));
+    if (playheadRef.current)
+      playheadRef.current.style.left = `${(time / project.duration) * 100}%`;
+  }, [playing, project, time]);
   useEffect(() => {
     if (!playing) {
       video.current?.pause();
       music.current?.pause();
       return;
     }
-    if (tRef.current >= stateRef.current.trimEnd - 0.05) {
+    if (tRef.current >= stateRef.current.trimEnd - 0.05)
       tRef.current = stateRef.current.trimStart;
-      setTime(tRef.current);
-    }
     const sound =
       stateRef.current.settings.clickVolume > 0 ? new AudioContext() : null;
     if (sound) void sound.resume();
     let lastOutput = outputTimeAt(stateRef.current, tRef.current);
     let frame = 0,
       last = performance.now();
+    const draw = (p: Project, t: number) => {
+      if (!canvas.current) return;
+      try {
+        renderFrame(canvas.current, p, t, {
+          video: video.current,
+          background: background.current,
+        });
+      } catch (e) {
+        setPlaying(false);
+        notify(
+          (e as Error).message + " Choose Classic zoom if 3D is unavailable.",
+        );
+      }
+    };
     const tick = (now: number) => {
       const p = stateRef.current;
-      let next = sourceTime(
-        p,
-        outputTimeAt(p, tRef.current) + (now - last) / 1000,
-      );
-      if (video.current) video.current.playbackRate = speedAt(p, next);
+      const v = video.current;
+      let next: number;
+      if (!v) {
+        // The procedural sample has no media clock; follow the wall clock.
+        next = sourceTime(
+          p,
+          outputTimeAt(p, tRef.current) + (now - last) / 1000,
+        );
+      } else if (!v.paused && !v.seeking && v.readyState >= 2) {
+        // Follow the video's own clock so the drawn cursor and camera stay
+        // locked to the footage underneath them.
+        next = v.currentTime;
+      } else next = tRef.current;
+      last = now;
+      if (v) v.playbackRate = speedAt(p, next);
       const out = outputTimeAt(p, next),
         total = outputDuration(p);
-      if (video.current)
-        video.current.volume =
+      if (v)
+        v.volume =
           (p.settings.volume / 100) * fadeAt(out, total, p.settings.sourceFade);
       if (music.current)
         music.current.volume =
@@ -430,18 +477,22 @@ export default function App() {
           if (click >= lastOutput && click < out)
             playClick(sound, sound.destination, p.settings.clickVolume);
       lastOutput = out;
-      last = now;
       for (const cut of [...p.cuts].sort((a, b) => a.start - b.start))
         if (next >= cut.start && next < cut.end) next = cut.end;
-      if (next >= p.trimEnd) {
-        setTime(p.trimEnd);
+      if (next < p.trimStart) next = p.trimStart;
+      if (next >= p.trimEnd || (v?.ended ?? false)) {
+        tRef.current = p.trimEnd;
+        draw(p, p.trimEnd);
         setPlaying(false);
         return;
       }
-      if (video.current && Math.abs(video.current.currentTime - next) > 0.2)
-        video.current.currentTime = next;
+      if (v && !v.seeking && Math.abs(v.currentTime - next) > 0.2)
+        v.currentTime = next;
       tRef.current = next;
-      setTime(next);
+      draw(p, next);
+      if (timeTextRef.current) timeTextRef.current.textContent = timecode(out);
+      if (playheadRef.current)
+        playheadRef.current.style.left = `${(next / p.duration) * 100}%`;
       frame = requestAnimationFrame(tick);
     };
     const v = video.current;
@@ -461,8 +512,10 @@ export default function App() {
     return () => {
       cancelAnimationFrame(frame);
       void sound?.close();
+      // Hand the loop's position back to React so the paused frame matches.
+      setTime(tRef.current);
     };
-  }, [playing, s.speed, s.volume, s.musicVolume]);
+  }, [playing, s.speed, s.volume, s.musicVolume, notify]);
   const removeSelected = useCallback(() => {
     if (!selected) return;
     edit((p) => ({
@@ -499,9 +552,10 @@ export default function App() {
       if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
         e.preventDefault();
         setPlaying(false);
-        setTime((t) =>
+        seekTo(
           clamp(
-            t + (e.key === "ArrowRight" ? 1 : -1) * (e.shiftKey ? 1 : 1 / 30),
+            tRef.current +
+              (e.key === "ArrowRight" ? 1 : -1) * (e.shiftKey ? 1 : 1 / 30),
             project.trimStart,
             project.trimEnd,
           ),
@@ -641,7 +695,7 @@ export default function App() {
     }
   }
   function addZoom(mode: "2d" | "3d" = "2d") {
-    const start = clamp(time, project.trimStart, project.trimEnd - 0.3);
+    const start = clamp(tRef.current, project.trimStart, project.trimEnd - 0.3);
     const id = uid();
     edit((p) => ({
       ...p,
@@ -664,7 +718,7 @@ export default function App() {
     }));
     setSelected(id);
     setTab("zoom");
-    setTime(Math.min(start + 1, project.trimEnd - 0.1));
+    seekTo(Math.min(start + 1, project.trimEnd - 0.1));
     notify(
       mode === "3d"
         ? "3D focus added. Choose an angle in the inspector."
@@ -672,7 +726,7 @@ export default function App() {
     );
   }
   function addCut() {
-    const start = Math.min(time, project.trimEnd - 0.15),
+    const start = Math.min(tRef.current, project.trimEnd - 0.15),
       end = Math.min(start + 1, project.trimEnd);
     if (duration <= (end - start) / s.speed + 0.1) {
       notify("Keep at least a little footage in your project.");
@@ -728,7 +782,7 @@ export default function App() {
       project.trimEnd,
     );
     setPlaying(false);
-    setTime(next);
+    seekTo(next);
     if (e.type === "pointerdown")
       e.currentTarget.setPointerCapture(e.pointerId);
   };
@@ -928,7 +982,7 @@ export default function App() {
                 label="Back one second"
                 onClick={() => {
                   setPlaying(false);
-                  setTime((t) => Math.max(project.trimStart, t - 1));
+                  seekTo(Math.max(project.trimStart, tRef.current - 1));
                 }}
               >
                 <ArrowLeft size={15} />
@@ -948,13 +1002,13 @@ export default function App() {
                 label="Forward one second"
                 onClick={() => {
                   setPlaying(false);
-                  setTime((t) => Math.min(project.trimEnd, t + 1));
+                  seekTo(Math.min(project.trimEnd, tRef.current + 1));
                 }}
               >
                 <ArrowRight size={15} />
               </IconButton>
               <span className="time-display">
-                {timecode(outputTimeAt(project, time))}
+                <output ref={timeTextRef} aria-label="Current time" />
                 <span>/ {timecode(duration)}</span>
               </span>
             </div>
@@ -1110,7 +1164,7 @@ export default function App() {
                         onSelect={() => {
                           setSelected(z.id);
                           setTab("zoom");
-                          setTime((z.start + z.end) / 2);
+                          seekTo((z.start + z.end) / 2);
                           setPlaying(false);
                         }}
                         onChange={(range) =>
@@ -1138,7 +1192,7 @@ export default function App() {
                         onSelect={() => {
                           setSelected(c.id);
                           setTab("captions");
-                          setTime(c.start);
+                          seekTo(c.start);
                           setPlaying(false);
                         }}
                         onChange={(range) =>
@@ -1164,7 +1218,7 @@ export default function App() {
                         onSelect={() => {
                           setSelected(a.id);
                           setTab("annotations");
-                          setTime(a.start);
+                          seekTo(a.start);
                           setPlaying(false);
                         }}
                         onChange={(range) =>
@@ -1190,7 +1244,7 @@ export default function App() {
                         onSelect={() => {
                           setSelected(a.id);
                           setTab("pacing");
-                          setTime(a.start);
+                          seekTo(a.start);
                           setPlaying(false);
                         }}
                         onChange={(range) =>
@@ -1204,10 +1258,7 @@ export default function App() {
                       />
                     ))}
                   </div>
-                  <div
-                    className="playhead"
-                    style={{ left: `${(time / project.duration) * 100}%` }}
-                  >
+                  <div className="playhead" ref={playheadRef}>
                     <span />
                   </div>
                 </div>
@@ -1232,7 +1283,7 @@ export default function App() {
                         project.trimEnd - 0.1,
                       );
                       edit((p) => ({ ...p, trimStart: start }));
-                      setTime(start);
+                      seekTo(start);
                     }}
                   />
                 </label>
@@ -1500,7 +1551,7 @@ export default function App() {
                 onAdd={addZoom}
                 onSelect={(id, t) => {
                   setSelected(id);
-                  setTime(t);
+                  seekTo(t);
                   setPlaying(false);
                 }}
               />
@@ -1510,7 +1561,7 @@ export default function App() {
                 project={project}
                 edit={edit}
                 notify={notify}
-                time={time}
+                time={currentTime}
               />
             )}
             {tab === "pacing" && (
@@ -1518,12 +1569,12 @@ export default function App() {
                 project={project}
                 edit={edit}
                 notify={notify}
-                time={time}
+                time={currentTime}
                 selected={selected}
                 onSelect={(id) => {
                   setSelected(id);
                   const z = project.speeds.find((v) => v.id === id);
-                  if (z) setTime(z.start);
+                  if (z) seekTo(z.start);
                   setPlaying(false);
                 }}
               />
@@ -1614,7 +1665,10 @@ export default function App() {
                     className="button"
                     onClick={() => {
                       const id = uid();
-                      const start = Math.min(time, project.trimEnd - 0.2);
+                      const start = Math.min(
+                        tRef.current,
+                        project.trimEnd - 0.2,
+                      );
                       edit((p) => ({
                         ...p,
                         captions: [
@@ -1649,7 +1703,7 @@ export default function App() {
                         <button
                           className="caption-time"
                           onClick={() => {
-                            setTime(c.start);
+                            seekTo(c.start);
                             setPlaying(false);
                           }}
                         >
@@ -1762,7 +1816,10 @@ export default function App() {
                       key={a.type}
                       onClick={() => {
                         const id = uid();
-                        const start = Math.min(time, project.trimEnd - 0.2);
+                        const start = Math.min(
+                          tRef.current,
+                          project.trimEnd - 0.2,
+                        );
                         edit((p) => ({
                           ...p,
                           annotations: [
