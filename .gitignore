@@ -22,3 +22,7 @@ tests/.exports/
 tests/.native/
 tests/.projects/
 native/**/target/
+tests/.fake-take/
+tests/.projects-a5/
+tests/.profile-a4/
+tests/.profile-a5/

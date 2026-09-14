@@ -100,6 +100,7 @@ function helperPath() {
         __dirname,
         "../native/studio-capture/target/release/studio-capture.exe",
       );
+  if (process.env.STUDIO_FAKE_HELPER) return process.env.STUDIO_FAKE_HELPER;
   return process.platform === "win32" && fs.existsSync(file) ? file : null;
 }
 const stamp = (date) => {
@@ -595,10 +596,18 @@ app.whenReady().then(() => {
       video: "recording.mp4",
       events: "events.jsonl",
     });
-    const child = spawn(exe, ["record", JSON.stringify(config)], {
-      windowsHide: true,
-      stdio: ["pipe", "pipe", "pipe"],
-    });
+    // Tests can stand in a scripted helper that replays a prepared take.
+    const fake = process.env.STUDIO_FAKE_HELPER;
+    const child = fake
+      ? spawn(process.execPath, [fake, "record", JSON.stringify(config)], {
+          windowsHide: true,
+          stdio: ["pipe", "pipe", "pipe"],
+          env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+        })
+      : spawn(exe, ["record", JSON.stringify(config)], {
+          windowsHide: true,
+          stdio: ["pipe", "pipe", "pipe"],
+        });
     const current = (helper = { child, folder, stopped: false });
     const send = (message) => {
       if (mainWindow && !mainWindow.isDestroyed())

@@ -132,27 +132,51 @@
 
 ---
 
-## Phase A2 — Recording gets out of the way (outline; detailed at phase start)
+## Readability pass (added 2026-09-14, Dan: "the UI as is is hard for me to read")
 
-- Electron `setContentProtection(true)` (Windows display affinity "exclude from capture") on a small always-on-top control bar window; main window hides for the take and returns on stop.
-- Countdown overlay (3-2-1, skippable, setting remembered).
-- Automated check: record the display with the bar painted a unique colour; scan decoded frames for that colour.
+- [x] Hard-coded 7–23 px font sizes → nine rem tokens in `src/styles.css` (`--text-micro` 12 px … `--text-display` 28 px).
+- [x] 44 dim grey text colours lifted to ≥ 5.5:1 contrast on panel surfaces; tool rail, inspector and track labels widened.
+- [x] Ctrl + / Ctrl − / Ctrl 0 interface zoom, remembered (Electron).
+- Design context recorded in `.impeccable.md`.
 
-## Phase A3 — Real rendering export (outline)
+## Phase A2 — Recording gets out of the way (as built)
 
-- Decode source frames exactly (Mediabunny or WebCodecs `VideoDecoder`), render each output frame with `renderFrame`, encode with WebCodecs `VideoEncoder` (hardware H.264), mux MP4; audio rendered offline with `OfflineAudioContext` (source gain, music, fades, click sounds).
-- Runs in a hidden worker window so minimising doesn't throttle it.
-- ffprobe frame-count and PTS checks; existing 3D frame-match proof re-pointed at the new exporter.
+- [x] `capture()` takes a `beforeStart` hook: the screen is shared first (so the click still counts as permission), then the editor hides and the countdown runs, then recording starts.
+- [x] Countdown (`#countdown`) and floating bar (`#bar`) are extra windows of the same page (`src/RecordingOverlays.tsx`), frameless, non-focusable, always on top, with `setContentProtection(true)` (Windows "exclude from capture").
+- [x] Bar: pause/resume, speaker notes panel (capture-free teleprompter), discard with confirm, finish; closing it finishes the take. Finish brings the editor back to the front.
+- [x] "3-second countdown" toggle in the record dialog, remembered.
+- [x] `tests/a2-recording-ui.mjs`: bar painted magenta (STUDIO_TEST_MARKER) must be absent from recorded frames and leave no black box; a control run with exclusion off must find it.
+- Found while testing: applying the saved zoom level before the window first showed stopped Electron from ever showing it. Fixed; the A2 test asserts the window appears.
 
-## Phase A4 — Native capture helper (outline)
+## Phase A3 — Real rendering export (as built)
 
-- **Spike first (throwaway):** Rust exe using Windows Graphics Capture with cursor capture off + WASAPI loopback, both timestamped on QPC; prove cursor-free frames and ≤ 20 ms A/V offset on this PC. Stop and re-plan if it fails.
-- Real helper: display/window/region capture, hardware encode to fragmented MP4 (recoverable after a crash), WASAPI loopback audio, low-level mouse/keyboard hooks (clicks, right-click, scroll, drag, shortcut combos, typing activity without key text), cursor shape changes, JSON-lines event log. Built by `cargo build --release` from npm scripts.
-- Electron main process supervises the helper over stdio; project folders in `Videos\Studio Screen\`; legacy path kept as fallback.
-- Retire `electron/pointer.ps1`.
+- [x] `src/exporter.ts`: Mediabunny `VideoSampleSink.samplesAtTimestamps` gives the exact source frame per output frame; `renderFrame` draws it (`Media.frame`); `CanvasSource` encodes H.264 (MP4) or VP9 (WebM) at `QUALITY_VERY_HIGH`, key frame every 2 s; GIF via gifenc from the same frames.
+- [x] `src/audioMix.ts`: 5 s `OfflineAudioContext` chunks kept just ahead of the video: source pieces through cuts/speeds, exact linear fade automation, looping music, click sounds. `src/stretch.ts`: WSOLA pitch-preserving time stretch for speed sections.
+- [x] No hidden worker window was needed: the loop uses no timers or animation frames, and `backgroundThrottling` is off.
+- [x] Desktop writes through a `StreamTarget` to `Videos\Studio Screen\Exports` (`studio:export-*` IPC); cancel/failure deletes the file; "Show in folder".
+- [x] `tests/a3-export.mjs` (frame count, PTS spacing, frame match, pitch, cancel, minimized desktop export).
 
-## Phase A5 — Auto-edit on stop (outline)
+## Phase A4 — Native capture helper (as built)
 
-- Pure `autoEdit(project)` pass: look (last used), gliding zooms, typing speed-ups, idle speed-ups (editable rate), start/end trim; every generated item tagged `auto`.
-- Timeline styling for auto items, one-click delete, "Back to raw", summary toast; quick export with last-used settings.
-- Extra features specced individually before building.
+- Spike: a research agent built and ran a probe on this PC and confirmed borderless access for unpackaged apps, dirty regions (build 26100+), fMP4 via `MFTranscodeContainerType_FMPEG4` with ~0.3 s fragments that survive a kill, constant output frame rate, NVIDIA encoder defaulting to Constrained Baseline (set High), loopback QPC already in 100 ns.
+- [x] `native/studio-capture` (windows 0.62.2): `capture.rs` (WGC monitor/window, GPU crop, pad on shrink, pool recreate on resize, dirty-region area), `encoder.rs` (sink writer, DXGI surface buffers, H.264 High, GOP 2 s, AAC), `audio.rs` (loopback, float fallback), `input.rs` (LL hooks + 30 Hz cursor-shape polling), `main.rs` (armed start, begin/pause/resume/stop over stdin, CFR loop writing the newest frame per slot, silence fill, 240 Hz pointer throttle, key labelling, JSON-lines events, stats). `check` subcommand + `npm run native:check`.
+- [x] Electron: `studio:native-*` IPC, folder per take with `meta.json` status, `studio-media://` protocol with byte ranges and CORS (keeps canvases untainted), recovery scan, `project.json` autosave, helper told to stop when the window closes.
+- [x] Renderer: `src/nativeCapture.ts` (same control shape as browser capture), `src/nativeEvents.ts` (event log → points + activity), recorded cursor shapes, cursor hidden outside the area, legacy migration (drawn cursor off for baked-cursor footage), 60 fps default.
+- [x] `electron/pointer.ps1` retired; the browser-capture fallback polls pointer position only.
+- [x] Tests: `tests/a4-native-capture.mjs` (cursor-free vs control, events, 2 px click accuracy, A/V sync, helper kill, app kill + recovery), `tests/a4-soak.mjs` (memory over a long 4K60 take).
+
+## Phase A5 — Auto-edit on stop (as built)
+
+- [x] `src/autoEdit.ts`: trim to 0.5 s before first action; end trim at the start of the pointer's unbroken run to the bar (bar rectangle sent with "stop") or 0.15 s before Ctrl+Shift+R; typing 2× and idle 4× speed sections tagged `auto`; `backToRaw`; summary line.
+- [x] Zoom generation ignores clicks outside the recorded area or after the trim end (the bar click).
+- [x] Timeline: dashed automatic clips with a × remove; Pacing panel "Automatic edit" (Back to raw / Apply automatic edit); toast with a Back to raw action (toasts moved to the top of the window).
+- [x] Last look reused for new recordings (`studio-last-look`); export settings remembered; Ctrl+E quick export.
+- [x] `tests/a5-open-speed.mjs` with `tests/fake-helper.cjs` (a scripted helper replays a prepared 5-minute take so the post-Finish path is measured without recording the screen).
+
+### Extra features — proposed, not built (each needs a spec and Dan's go)
+
+1. **Mark-a-mistake hotkey**: press a key during recording to cut back to the last pause in speech/activity.
+2. **Auto-zoom on typing** (FocuSee): zoom to the text caret area during typing bursts.
+3. **Device frames** for window recordings (browser/app chrome styles).
+4. **Captions from system audio** with an on-device model (useful for recorded videos/meetings; no mic).
+5. **Delete recording folders from the library** (currently the library only removes the database entry).

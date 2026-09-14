@@ -13,6 +13,8 @@ const application = await electron.launch({
     ...process.env,
     ELECTRON_ENABLE_LOGGING: "1",
     STUDIO_USER_DATA: path.join(root, "tests/.profile"),
+    // This test covers the browser-capture fallback; native capture has tests/a4.
+    STUDIO_DISABLE_NATIVE: "1",
   },
 });
 try {
