@@ -9,10 +9,12 @@
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest run",
     "desktop": "electron .",
-    "desktop:dev": "concurrently -k \"npm:dev\" \"wait-on http://127.0.0.1:5173 && electron . --dev\"",
-    "desktop:pack": "npm run build && electron-builder --win portable",
+    "desktop:dev": "npm run native:build && concurrently -k \"npm:dev\" \"wait-on http://127.0.0.1:5173 && electron . --dev\"",
+    "desktop:pack": "npm run build && npm run native:build && electron-builder --win portable",
     "test:browser": "node tests/browser-smoke.mjs",
-    "test:desktop": "node tests/desktop-capture.mjs"
+    "test:desktop": "node tests/desktop-capture.mjs",
+    "native:build": "cargo build --release --manifest-path native/studio-capture/Cargo.toml",
+    "native:check": "node scripts/native-check.mjs"
   },
   "main": "electron/main.cjs",
   "dependencies": {
@@ -51,8 +53,11 @@
       "icon": "build/icon.ico"
     },
     "npmRebuild": false,
-    "asarUnpack": [
-      "electron/pointer.ps1"
+    "extraResources": [
+      {
+        "from": "native/studio-capture/target/release/studio-capture.exe",
+        "to": "studio-capture.exe"
+      }
     ]
   },
   "description": "Local-first screen recording and editing with internal PC audio.",

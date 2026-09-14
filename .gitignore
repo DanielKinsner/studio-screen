@@ -18,3 +18,7 @@ tests/*-results.json
 *.key
 tests/.profile/
 tests/*.jsonl
+tests/.exports/
+tests/.native/
+tests/.projects/
+native/**/target/
