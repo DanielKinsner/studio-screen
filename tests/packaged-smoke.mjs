@@ -1,9 +1,12 @@
 import { _electron as electron, expect } from "@playwright/test";
 import fs from "node:fs/promises";
 import path from "node:path";
+const { version } = JSON.parse(
+  await fs.readFile(new URL("../package.json", import.meta.url), "utf8"),
+);
 const executablePath = path.resolve(
   process.argv.includes("--portable")
-    ? "release/Studio Screen 0.2.0.exe"
+    ? `release/Studio Screen ${version}.exe`
     : "release/win-unpacked/Studio Screen.exe",
 );
 const app = await electron.launch({ executablePath, timeout: 60000 });

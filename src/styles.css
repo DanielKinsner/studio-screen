@@ -416,9 +416,11 @@ p {
 .preview-frame:fullscreen {
   width: 100%;
   height: 100%;
+  max-width: none;
+  max-height: none;
   border-radius: 0;
   background: #17191b;
-  padding: 20px;
+  padding: 0;
 }
 .preview-frame.targeting {
   cursor: crosshair;

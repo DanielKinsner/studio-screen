@@ -1,4 +1,5 @@
 import TimelineClip from "./TimelineClip";
+import { usePreviewSize } from "./usePreviewSize";
 import { fadeAt, clickEvents, playClick } from "./sound";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -226,6 +227,7 @@ export default function App() {
   const tRef = useRef(time);
   tRef.current = time;
   const s = project.settings;
+  const previewSize = usePreviewSize(canvas, s.aspect);
   const duration = outputDuration(project);
   const zooms = autoZooms(project);
   const notify = useCallback((value: string) => setToast(value), []);
@@ -367,7 +369,11 @@ export default function App() {
   }, [project.backgroundImage]);
   useEffect(() => {
     if (!canvas.current) return;
-    Object.assign(canvas.current, dimensions(s.aspect, 900));
+    if (
+      canvas.current.width !== previewSize.width ||
+      canvas.current.height !== previewSize.height
+    )
+      Object.assign(canvas.current, previewSize);
     try {
       renderFrame(canvas.current, project, time, {
         video: video.current,
@@ -379,7 +385,7 @@ export default function App() {
         (e as Error).message + " Choose Classic zoom if 3D is unavailable.",
       );
     }
-  }, [project, time, mediaVersion, s.aspect]);
+  }, [project, time, mediaVersion, s.aspect, previewSize, notify]);
   useEffect(() => {
     const v = video.current;
     if (!playing && v && Math.abs(v.currentTime - time) > 0.04) {
@@ -1956,7 +1962,7 @@ export default function App() {
             : saved}
         </span>
         <span>
-          Less editing. More creating.<span className="version">v0.2</span>
+          Less editing. More creating.<span className="version">v0.2.1</span>
         </span>
       </footer>
       {toast && (

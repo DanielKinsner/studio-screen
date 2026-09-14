@@ -31,3 +31,13 @@ Camera and microphone recording are intentionally excluded. The sample project i
 - Final portable: launches through its extracted application, native picker works, actual internal-audio recording succeeds (2.257 seconds). Independent decode detects 440 Hz in its captured audio. `tests/portable-results.json`, `tests/portable-capture.webm`.
 - Final custom-region repeat: 50% width/height, 166 coordinate samples, Ctrl+K, four typing events, two clicks; composed audio decodes with about 0.05 dB source/export RMS difference.
 - Audio fade integration: a controlled constant-tone fixture with both a cut and a 2× speed section exports to 2.94 seconds for a three-second edit. Beginning/end RMS are about 15–16 dB below the middle with 0.8-second fades. `tests/fade-results.json`.
+
+
+## v0.2.1 — native 4K window
+
+- Desktop startup maximizes on the pointer's monitor; bounds use Electron's device-independent coordinates so a 3840×2160 display at 150% scaling is handled as 2560×1440 logical pixels.
+- Removed the fixed 1600×900 preview buffer. Canvas resolution follows its visible size and device pixel ratio, capped at 4K. Resize, fullscreen, and monitor-DPI changes trigger an update.
+- Actual Windows 4K/150% check: maximized preview 2126×1196 physical pixels for its available editor area; fullscreen preview exactly 3840×2160; restored 1100×800 window preview 562×316. No page errors or horizontal overflow. `tests/hidpi-window.mjs` and `tests/hidpi-results.json`.
+- Production compilation and browser editing/export/persistence/mobile smoke pass. Capture and export resolution settings are unchanged; this update improves the native window and preview rendering.
+
+- Packaged DPI test and final portable launch/capture also pass. Artifact: `release/Studio Screen 0.2.1.exe`; 128272245 bytes; SHA-256 `5E66C9B0EED2963913471C5EE7F965D4B008A8C0CB4C93BC5FC02DF34D4A9AA5`. Unsigned local development build.

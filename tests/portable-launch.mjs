@@ -3,6 +3,9 @@ import { spawn } from "node:child_process";
 import { createServer } from "node:net";
 import path from "node:path";
 import fs from "node:fs/promises";
+const { version } = JSON.parse(
+  await fs.readFile(new URL("../package.json", import.meta.url), "utf8"),
+);
 const port = await new Promise((resolve) => {
   const server = createServer();
   server.listen(0, "127.0.0.1", () => {
@@ -10,7 +13,7 @@ const port = await new Promise((resolve) => {
     server.close(() => resolve(port));
   });
 });
-const exe = path.resolve("release/Studio Screen 0.2.0.exe");
+const exe = path.resolve(`release/Studio Screen ${version}.exe`);
 const processHandle = spawn(exe, [`--remote-debugging-port=${port}`], {
   windowsHide: true,
   stdio: "ignore",

@@ -50,11 +50,20 @@ function sendPoint(x, y, click, bounds, shortcut, typing) {
   });
 }
 app.whenReady().then(() => {
+  // Electron bounds are device-independent pixels; Windows applies the monitor DPI.
+  const { workArea } = screen.getDisplayNearestPoint(
+    screen.getCursorScreenPoint(),
+  );
+  const width = Math.min(1480, workArea.width),
+    height = Math.min(980, workArea.height);
   mainWindow = new BrowserWindow({
-    width: 1480,
-    height: 980,
-    minWidth: 800,
-    minHeight: 700,
+    width,
+    height,
+    x: workArea.x + Math.round((workArea.width - width) / 2),
+    y: workArea.y + Math.round((workArea.height - height) / 2),
+    minWidth: Math.min(800, workArea.width),
+    minHeight: Math.min(700, workArea.height),
+    show: false,
     title: "Studio Screen",
     backgroundColor: "#1d1f21",
     autoHideMenuBar: true,
@@ -65,6 +74,10 @@ app.whenReady().then(() => {
       sandbox: true,
       backgroundThrottling: false,
     },
+  });
+  mainWindow.once("ready-to-show", () => {
+    mainWindow.maximize();
+    mainWindow.show();
   });
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   mainWindow.webContents.on("will-navigate", (event, url) => {

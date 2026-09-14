@@ -11,6 +11,8 @@ npm install
 npm run desktop:dev
 ```
 
+The desktop window opens maximized on the monitor containing the pointer, respecting Windows DPI scaling. The preview uses physical display pixels up to 4K; fullscreen landscape preview fills a 3840×2160 display without padding. Restoring/resizing the window or changing monitors updates preview resolution automatically.
+
 The browser editor is also available with `npm run dev` at `http://127.0.0.1:5173`. For a desktop build without the development server:
 
 ```powershell
@@ -31,7 +33,7 @@ $env:ELECTRON_BUILDER_COMPRESSION_LEVEL='3'
 npm run desktop:pack -- --config.electronDist=node_modules/electron/dist
 ```
 
-Output: `release/Studio Screen 0.2.0.exe`. It is a local development build, not a signed public release. No deployment or publication is performed.
+Output: `release/Studio Screen 0.2.1.exe`. It is a local development build, not a signed public release. No deployment or publication is performed.
 
 ## Workflow
 
@@ -91,6 +93,7 @@ node tests/v2-proof.mjs
 node tests/v2-visual.mjs
 node tests/v2-audio.mjs
 node tests/audio-proof.mjs
+node tests/hidpi-window.mjs
 node tests/packaged-smoke.mjs
 node tests/portable-launch.mjs
 ```
