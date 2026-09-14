@@ -1,38 +1,33 @@
-# Feature parity tracker
+# Feature parity tracker — v0.2
 
-Reference review: 2026-09-14. Sources: [Screen Studio guide](https://screen.studio/guide/home), [Screen Studio zoom guide](https://preview.screen.studio/guide/adding-editing-zooms), [FocuSee features](https://focusee.imobie.com/). These products have different feature sets; the target is their combined workflow, with screen recording and PC audio prioritized by the user. No claim of complete parity is made.
+Reference review: 2026-09-14. The target is the combined screen-recording and editing workflow of Screen Studio and FocuSee, excluding camera and microphone capture. This application is independent and does not claim complete parity.
 
-| Capability | Studio Screen implementation | Remaining work / boundary |
+FocuSee's own [April 2026 update](https://focusee.imobie.com/news/focusee-2026-april-update.htm) places 3D Motion after the original 2.0 release. The current [3D guide](https://focusee.imobie.com/guide/3d-motion-effect.htm), [motion blur guide](https://focusee.imobie.com/guide/motion-blur.htm), [cursor guide](https://focusee.imobie.com/guide/cursor-effect.htm), [Screen Studio guide](https://screen.studio/guide/home), and [typing speed guide](https://preview.screen.studio/guide/speed-up-typing-segments) informed this update.
+
+| Capability | Studio Screen v0.2 | Remaining boundary |
 |---|---|---|
-| Display and window capture | Electron source picker; browser screen-sharing picker | Multi-display, DPI, GPU and long-session soak tests |
-| Custom area capture | Pre-encode rectangular crop; preserves system audio | Interactive OS region overlay and pixel-coordinate entry |
-| Internal PC audio | Windows WASAPI loopback via Chromium/Electron; stereo 48 kHz verified | Per-application isolation; device-change and unusual driver coverage |
-| Pause/resume / stop shortcut | Implemented and exercised in native capture | OS recording toolbar outside main app |
-| Local video import | MP4/WebM and other browser-decodable formats | Broader native decoder coverage |
-| Automatic click focus | Windows display cursor/click samples create zooms | Window-coordinate tracking, robust native event hook, missed very short clicks |
-| Manual zoom and focus | Editable start/end/scale/position; eased transitions | Spring controls, continuous follow and transition tuning |
-| Cursor scale and click effects | Metadata overlay with configurable size/click rings | Removal of original cursor pixels, native cursor asset capture, cursor styles, hide-on-idle, click audio |
-| Background and framing | Gradients, solid, imported image, padding, corners, shadow, aspect presets | Reusable style/preset library, device frames |
-| Timeline editing | Trim, cut ranges, undo/redo, scrub, keyboard frame step | Split/reorder/multiple source clips, drag handles, speed segments, ripple tools |
-| Playback speed | Global 0.5–4× | Automatic typing acceleration and idle/silence removal |
-| 3D motion / motion blur | Open | Shared export-capable perspective and motion renderer |
-| Annotations | Text, arrow, spotlight, solid privacy masks | True blur, richer shape styles, annotation dragging/keyframes |
-| Captions | Manual captions, SRT/WebVTT import, burned-in export | Automatic speech transcription, translation, caption theme library |
-| Keyboard overlays | Open | Recording-scoped shortcut metadata and renderer |
-| Music / audio control | Source volume and imported looping music | Fades, ducking, independent mic/system stems and audio editing |
-| Microphone | Optional, off by default; capture-time suppression | Lower priority; no microphone device validation performed |
-| Camera and camera effects | Deferred by user | No camera UI exposed |
-| Speaker notes | Editable in-app notes during capture | Auto-scrolling teleprompter and capture-excluded native overlay |
-| Mobile/iOS capture | Open | Native device integration |
-| MP4/WebM/GIF export | Real local composited output, PNG frames | Guaranteed CFR/hardware pipeline and deterministic frame/audio sync |
-| 4K / 60 fps | Selectable encode targets | Sustained native performance and final file proof still required |
-| Local projects | IndexedDB, library, embedded-media archive | Crash recovery, streaming to disk, archive compression and migrations |
-| Web sharing / embeds | Open | User-approved hosting/integration provisioning, links, analytics, interactive content |
+| Display/window capture | Windows source picker, browser sharing, pause/resume, stop shortcut | Long-session, GPU, device-change coverage |
+| Custom region | Rectangle cropped before encoding, preserving internal audio | Native OS region overlay; pixel-entry controls |
+| Internal PC audio | Windows whole-PC loopback; stereo 48 kHz verified | Per-application isolation and driver/device matrix |
+| 3D zoom | Shared WebGL perspective renderer; manual X/Y/Z rotation, focus, offsets, FOV, four angle presets | Reference-product physical spring tuning and more presets |
+| Automatic 3D | Click-generated focus; recorded-pointer-driven tilt and optional pan | Native event hooks and unusual window geometry |
+| Motion blur | Three spatial samples of moving screen and cursor, used by preview and export | Adaptive/higher quality sampling; motion-cost optimization |
+| Motion styles | Focused, smooth, gentle easing | Custom spring physics |
+| Cursor effects | Dark/light/dot, scale, angle, smoothing, idle/timed hide, ring/pulse, synthesized click sound | Erasing the cursor baked into source pixels; native cursor assets |
+| Metadata | Display and live DWM-window coordinates; clicks, Ctrl/Alt/Win combinations and function keys; typing activity booleans | Polling can miss short events; high-DPI/multi-monitor matrix |
+| Shortcut overlays | Timed readable shortcut chips in preview/export; never stores plain typed text | Remapping/formatting UI; complete keyboard/layout coverage |
+| Timeline | Drag/move/resize focus, caption, element and speed sections; trim, cuts, undo/redo, keyboard editing | Multiple sources, reorder/ripple editing, exact frame scheduling |
+| Speed sections | 0.5–4× per-section overrides; typing activity generates 2× sections | Automatic silence/idle removal; overlap stacking (first section wins) |
+| Canvas | Gradients, colors/images, padding, corners, shadow, crop, six ratios, browser title bar, watermark | Other device mockups and frame presets |
+| Styles | Three looks; locally saved styles; import/export style files | Team/shared style libraries |
+| Annotations | Text, arrow, spotlight, opaque redact, soft blur, box, ellipse, numbered step, color | Motion keyframes and dragging elements directly in preview |
+| Captions | Manual/imported SRT/WebVTT; three themes, size/placement, burned-in export, edited-time SRT | Automatic transcription/translation and word highlighting |
+| Music/audio | Source/music gain, looped imported track, fade-in/out over edited duration | Ducking, stems, waveform/audio editing, AI enhancement |
+| Camera/microphone | Excluded by request; no recording controls or device requests | Deferred |
+| Exports | MP4 where encoder is available, WebM, GIF, PNG; composited 3D included | Foreground real-time export; guaranteed CFR/hardware pipeline |
+| 4K/60 fps | Selectable targets | Sustained performance not certified |
+| Local projects | IndexedDB autosave, library, embedded archive; v1/v2 migration | Disk streaming, recovery, huge-file archive compression |
+| Speaker notes | In-app notes during capture | Auto-scrolling/capture-excluded native teleprompter |
+| Mobile/cloud | Not implemented | Native mobile devices, public share links, analytics/embeds |
 
-## Next engineering priorities
-
-1. Disk-backed native capture with interruption recovery and 30/60 fps performance receipts.
-2. Native cursor suppression, high-DPI display/window coordinate mapping, and consistent click metadata.
-3. Deterministic export timing with per-segment speeds, frame-accurate cuts, and richer focus transitions.
-4. Motion blur, 3D framing, keyboard overlays, reusable styles, and direct timeline manipulation.
-5. Broaden OS/codec/device coverage; add other requested reference-product features after the core capture lane is reliable.
+Next priorities: disk-backed capture/recovery, native cursor suppression, deterministic export scheduling, and broader Windows display/driver testing. macOS/Linux behavior is not validated.
