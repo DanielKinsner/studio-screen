@@ -10,6 +10,8 @@ export default function TimelineClip({
   selected,
   onSelect,
   onChange,
+  auto,
+  onRemove,
 }: Range & {
   duration: number;
   label: string;
@@ -17,6 +19,9 @@ export default function TimelineClip({
   selected: boolean;
   onSelect: () => void;
   onChange: (v: Range) => void;
+  /** Made by the automatic edit: dashed, with a one-click remove. */
+  auto?: boolean;
+  onRemove?: () => void;
 }) {
   const [draft, setDraft] = useState<Range | null>(null);
   const drag = useRef<{
@@ -33,7 +38,7 @@ export default function TimelineClip({
       tabIndex={0}
       aria-label={label}
       aria-pressed={selected}
-      className={`${kind}-clip draggable-clip ${selected ? "selected" : ""}`}
+      className={`${kind}-clip draggable-clip ${selected ? "selected" : ""} ${auto ? "auto" : ""}`}
       style={{
         left: `${(v.start / duration) * 100}%`,
         width: `${((v.end - v.start) / duration) * 100}%`,
@@ -102,6 +107,20 @@ export default function TimelineClip({
     >
       <span className="clip-edge" data-edge="start" />
       <span className="clip-text">{label}</span>
+      {auto && onRemove && (
+        <button
+          className="clip-remove"
+          aria-label={`Remove automatic ${label}`}
+          title="Remove this automatic edit"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
+        >
+          ×
+        </button>
+      )}
       <span className="clip-edge" data-edge="end" />
     </div>
   );

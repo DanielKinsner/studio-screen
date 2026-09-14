@@ -1,4 +1,4 @@
-import { cleanSettings, withCameraFeel } from "./settings";
+import { cleanSettings, styleKeys, withCameraFeel } from "./settings";
 import { useRef, useState } from "react";
 import {
   ArrowDownToLine,
@@ -17,30 +17,8 @@ import type { Project, Settings } from "./types";
 import type { PanelProps } from "./MotionPanel";
 import { Slider, Toggle, IconButton } from "./Controls";
 import { clamp, typingSections, captionsSrt } from "./timeline";
+import { autoEdit, backToRaw, describeSummary } from "./autoEdit";
 import { download } from "./storage";
-const styleKeys = [
-  "background",
-  "color",
-  "padding",
-  "radius",
-  "shadow",
-  "aspect",
-  "motionMode",
-  "motionIntensity",
-  "motionEase",
-  "cameraResponse",
-  "cameraBounce",
-  "followCursor",
-  "motionBlur",
-  "cursorStyle",
-  "cursorSize",
-  "cursorHighlight",
-  "captionTheme",
-  "captionSize",
-  "deviceFrame",
-  "watermark",
-  "watermarkOpacity",
-] as const;
 const builtins = [
   {
     name: "Clean tutorial",
@@ -500,6 +478,49 @@ export function TimelineEdits({
           Speed up a section, skip a pause, or tighten your in and out points.
         </p>
       </div>
+      {!p.demo && (
+        <section className="auto-edit">
+          <div className="section-title">
+            <h2>
+              <WandSparkles size={14} />
+              Automatic edit
+            </h2>
+          </div>
+          {p.autoEdit ? (
+            <>
+              <p className="helper-text">
+                Trimmed, sped up and zoomed for you. Dashed clips on the
+                timeline are automatic: remove any with its ×.
+              </p>
+              <button
+                className="button full-width"
+                onClick={() => {
+                  edit(backToRaw);
+                  notify("Back to the raw recording. Your own edits are kept.");
+                }}
+              >
+                Back to raw
+              </button>
+            </>
+          ) : (
+            <button
+              className="button full-width"
+              onClick={() => {
+                const { project, summary } = autoEdit(p, { stop: "other" });
+                if (!summary.applied) {
+                  notify("This recording is too short for an automatic edit.");
+                  return;
+                }
+                edit(() => project);
+                notify(`Automatic edit: ${describeSummary(summary)}.`);
+              }}
+            >
+              <WandSparkles size={15} />
+              Apply automatic edit
+            </button>
+          )}
+        </section>
+      )}
       <button
         className="button full-width"
         onClick={() => {

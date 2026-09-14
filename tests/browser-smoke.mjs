@@ -28,6 +28,7 @@ await page
   .waitFor();
 await page.getByRole("button", { name: "Pause playback", exact: true }).click();
 await page.getByRole("button", { name: "Export video", exact: true }).click();
+await page.getByLabel("Export format").selectOption("webm");
 await page.getByLabel("Export resolution").selectOption("720");
 const downloaded = page.waitForEvent("download");
 await page

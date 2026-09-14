@@ -79,6 +79,13 @@ import {
 import { dimensions, renderFrame } from "./compositor";
 import { exportProject, type ExportFormat } from "./exporter";
 import { nativeCapture } from "./nativeCapture";
+import {
+  autoEdit,
+  backToRaw,
+  describeSummary,
+  type StopKind,
+} from "./autoEdit";
+import { lastLook, rememberLook } from "./settings";
 import { parseEvents } from "./nativeEvents";
 import { capture, getDuration, loadVideo, releaseVideo } from "./media";
 import {
@@ -211,11 +218,37 @@ export default function App() {
     }
   });
   const discardRef = useRef(false);
+  const runExportRef = useRef<() => Promise<void>>(async () => {});
+  // How the take ended, and where the bar was: the auto-edit trims that reach.
+  const stopRef = useRef<{
+    kind: StopKind;
+    bar?: { x: number; y: number; width: number; height: number };
+  }>({ kind: "other" });
+  const [toastAction, setToastAction] = useState<{
+    label: string;
+    run: () => void;
+  } | null>(null);
   const [notes, setNotes] = useState("");
   const [showNotes, setShowNotes] = useState(false);
-  const [exportFormat, setExportFormat] = useState<ExportFormat>("mp4");
-  const [exportHeight, setExportHeight] = useState(1080);
-  const [exportFps, setExportFps] = useState(30);
+  // Export settings are remembered so the next export is one keypress (Ctrl+E).
+  const savedExport = (() => {
+    try {
+      return JSON.parse(localStorage.getItem("studio-export") || "{}");
+    } catch {
+      return {};
+    }
+  })();
+  const [exportFormat, setExportFormat] = useState<ExportFormat>(() =>
+    ["mp4", "webm", "gif"].includes(savedExport.format)
+      ? savedExport.format
+      : "mp4",
+  );
+  const [exportHeight, setExportHeight] = useState<number>(() =>
+    [720, 1080, 2160].includes(savedExport.height) ? savedExport.height : 1080,
+  );
+  const [exportFps, setExportFps] = useState<number>(() =>
+    [30, 60].includes(savedExport.fps) ? savedExport.fps : 60,
+  );
   const [exportProgress, setExportProgress] = useState<number | null>(null);
   const [exportDone, setExportDone] = useState(false);
   const [exportSpeed, setExportSpeed] = useState(0);
@@ -258,7 +291,17 @@ export default function App() {
   const previewSize = usePreviewSize(canvas, s.aspect);
   const duration = outputDuration(project);
   const zooms = autoZooms(project);
-  const notify = useCallback((value: string) => setToast(value), []);
+  const notify = useCallback((value: string) => {
+    setToastAction(null);
+    setToast(value);
+  }, []);
+  const notifyAction = useCallback(
+    (value: string, label: string, run: () => void) => {
+      setToast(value);
+      setToastAction({ label, run });
+    },
+    [],
+  );
   const edit = useCallback((fn: (p: Project) => Project) => {
     const previous = stateRef.current;
     const next = fn(previous);
@@ -345,9 +388,31 @@ export default function App() {
   }, [project, ready, notify]);
   useEffect(() => {
     if (!toast) return;
-    const timer = setTimeout(() => setToast(""), 6000);
+    const timer = setTimeout(
+      () => {
+        setToast("");
+        setToastAction(null);
+      },
+      toastAction ? 14000 : 6000,
+    );
     return () => clearTimeout(timer);
-  }, [toast]);
+  }, [toast, toastAction]);
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        "studio-export",
+        JSON.stringify({
+          format: exportFormat,
+          height: exportHeight,
+          fps: exportFps,
+        }),
+      );
+    } catch {}
+  }, [exportFormat, exportHeight, exportFps]);
+  // New recordings start with the look of the last project edited.
+  useEffect(() => {
+    if (ready && !project.demo) rememberLook(project.settings);
+  }, [ready, project.demo, project.settings]);
   useEffect(() => {
     let alive = true;
     let loaded: HTMLVideoElement | null = null;
@@ -564,6 +629,12 @@ export default function App() {
         e.preventDefault();
         setPlaying((v) => !v);
       }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "e") {
+        // Quick export with the last settings used.
+        e.preventDefault();
+        setModal("export");
+        void runExportRef.current();
+      }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
         e.shiftKey ? redo() : undo();
@@ -594,7 +665,12 @@ export default function App() {
     removeSelected,
   ]);
   useEffect(
-    () => window.studioDesktop?.onStop(() => captureRef.current?.stop()),
+    () =>
+      window.studioDesktop?.onStop(() => {
+        if (!captureRef.current) return;
+        stopRef.current = { kind: "hotkey" };
+        captureRef.current.stop();
+      }),
     [],
   );
   useEffect(() => {
@@ -612,7 +688,7 @@ export default function App() {
   }, [recording, recordPaused]);
   useEffect(
     () =>
-      window.studioDesktop?.onCommand((command) => {
+      window.studioDesktop?.onCommand((command, bar) => {
         const control = captureRef.current;
         if (!control) return;
         if (command === "pause") {
@@ -623,6 +699,7 @@ export default function App() {
           setRecordPaused(false);
         } else {
           discardRef.current = command === "discard";
+          stopRef.current = { kind: "bar", bar };
           control.stop();
         }
       }),
@@ -730,6 +807,7 @@ export default function App() {
     let barShown = false;
     setBusy(true);
     discardRef.current = false;
+    stopRef.current = { kind: "other" };
     // Desktop: get out of the way and count in before the first recorded frame.
     const beforeStart = desktop
       ? async () => {
@@ -817,20 +895,43 @@ export default function App() {
         );
       const p = newProject(false);
       p.name = `Recording · ${new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+      p.settings = { ...p.settings, ...lastLook() };
       result.apply(p);
       p.duration = result.duration;
       p.trimEnd = result.duration;
       p.points = result.points;
-      openProject(p);
-      notify(
+      // The rough cut: trim, speed up typing and waiting, zoom to clicks.
+      const stop = stopRef.current;
+      const bar =
+        stop.bar && regionEnabled
+          ? {
+              x: (stop.bar.x - region.x) / region.width,
+              y: (stop.bar.y - region.y) / region.height,
+              width: stop.bar.width / region.width,
+              height: stop.bar.height / region.height,
+            }
+          : stop.bar;
+      const { project: edited, summary } = autoEdit(p, {
+        stop:
+          result.reason && result.reason !== "stopped" ? "other" : stop.kind,
+        bar,
+      });
+      openProject(edited);
+      const note =
         result.reason === "window-closed"
-          ? "The window you were recording closed, so the take ended there."
+          ? "The window you were recording closed, so the take ended there. "
           : result.reason === "interrupted"
-            ? "Recording stopped unexpectedly; everything up to that moment is kept."
+            ? "Recording stopped unexpectedly; everything up to that moment is kept. "
             : systemAudio && !result.hasSystemAudio
-              ? "Recording ready. The selected source did not provide system audio."
-              : "Recording ready. Make it your own.",
-      );
+              ? "The selected source did not provide system audio. "
+              : "";
+      if (summary.applied)
+        notifyAction(
+          `${note}Auto-edit: ${describeSummary(summary)}.`,
+          "Back to raw",
+          () => edit(backToRaw),
+        );
+      else notify(`${note}Recording ready. Make it your own.`);
     } catch (e) {
       setRecording(false);
       captureRef.current = null;
@@ -889,7 +990,9 @@ export default function App() {
       "Removed one second from this point. Undo to restore it, or adjust the cut below.",
     );
   }
+  runExportRef.current = runExport;
   async function runExport() {
+    if (abortRef.current) return;
     setPlaying(false);
     setExportDone(false);
     setExportedPath(null);
@@ -1338,6 +1441,16 @@ export default function App() {
                         duration={project.duration}
                         label={`${(z.mode || s.motionMode) === "3d" ? "3D" : "2D"} · ${z.scale.toFixed(1)}×`}
                         kind="zoom"
+                        auto={
+                          z.id.startsWith("auto-") &&
+                          !project.zooms.some((v) => v.id === z.id)
+                        }
+                        onRemove={() =>
+                          edit((p) => ({
+                            ...p,
+                            dismissedZooms: [...p.dismissedZooms, z.id],
+                          }))
+                        }
                         selected={selected === z.id}
                         onSelect={() => {
                           setSelected(z.id);
@@ -1418,6 +1531,13 @@ export default function App() {
                         duration={project.duration}
                         label={`${a.rate}× speed`}
                         kind="speed"
+                        auto={a.auto}
+                        onRemove={() =>
+                          edit((p) => ({
+                            ...p,
+                            speeds: p.speeds.filter((v) => v.id !== a.id),
+                          }))
+                        }
                         selected={selected === a.id}
                         onSelect={() => {
                           setSelected(a.id);
@@ -2203,6 +2323,18 @@ export default function App() {
       {toast && (
         <div className="toast" role="status">
           <span>{toast}</span>
+          {toastAction && (
+            <button
+              className="button subtle"
+              onClick={() => {
+                toastAction.run();
+                setToast("");
+                setToastAction(null);
+              }}
+            >
+              {toastAction.label}
+            </button>
+          )}
           <IconButton label="Dismiss notification" onClick={() => setToast("")}>
             <X size={14} />
           </IconButton>
@@ -2609,6 +2741,8 @@ export default function App() {
               ["Redo", "Ctrl / ⌘ + Shift + Z"],
               ["Remove selected edit", "Delete"],
               ["Stop desktop recording", "Ctrl + Shift + R"],
+              ["Quick export (last settings)", "Ctrl + E"],
+              ["Bigger / smaller interface", "Ctrl + = / Ctrl + −"],
             ].map(([a, b]) => (
               <div key={a}>
                 <span>{a}</span>

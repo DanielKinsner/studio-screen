@@ -501,8 +501,26 @@ app.whenReady().then(() => {
   });
   ipcMain.handle("studio:bar-command", (event, name) => {
     assertBar(event);
-    if (["pause", "resume", "stop", "discard"].includes(name))
-      mainWindow?.webContents.send("studio:command", name);
+    if (!["pause", "resume", "stop", "discard"].includes(name)) return;
+    // Where the bar sat on the recorded display, so the auto-edit can drop the
+    // reach for it. Window recordings don't need it: the bar is outside them.
+    let bar;
+    if (
+      name === "stop" &&
+      barWindow &&
+      recordingDisplay &&
+      selectedSource?.id.startsWith("screen:")
+    ) {
+      const b = barWindow.getBounds(),
+        d = recordingDisplay.bounds;
+      bar = {
+        x: (b.x - d.x) / d.width,
+        y: (b.y - d.y) / d.height,
+        width: b.width / d.width,
+        height: b.height / d.height,
+      };
+    }
+    mainWindow?.webContents.send("studio:command", name, bar);
   });
   ipcMain.handle("studio:bar-expand", (event, expanded) => {
     assertBar(event);

@@ -31,6 +31,49 @@ const choices: Partial<Record<keyof Settings, string[]>> = {
   captionTheme: ["classic", "light", "minimal"],
   deviceFrame: ["none", "browser"],
 };
+/** Settings that make up a look: saved styles and the look new recordings reuse. */
+export const styleKeys = [
+  "background",
+  "color",
+  "padding",
+  "radius",
+  "shadow",
+  "aspect",
+  "motionMode",
+  "motionIntensity",
+  "motionEase",
+  "cameraResponse",
+  "cameraBounce",
+  "followCursor",
+  "motionBlur",
+  "cursorStyle",
+  "cursorSize",
+  "cursorHighlight",
+  "captionTheme",
+  "captionSize",
+  "deviceFrame",
+  "watermark",
+  "watermarkOpacity",
+] as const;
+export const lookOf = (s: Settings) =>
+  Object.fromEntries(styleKeys.map((k) => [k, s[k]])) as Partial<Settings>;
+const LAST_LOOK = "studio-last-look";
+export function rememberLook(s: Settings) {
+  try {
+    localStorage.setItem(LAST_LOOK, JSON.stringify(lookOf(s)));
+  } catch {}
+}
+/** The look of the last real project Dan edited, cleaned for safety. */
+export function lastLook(): Partial<Settings> {
+  try {
+    return withCameraFeel(
+      cleanSettings(JSON.parse(localStorage.getItem(LAST_LOOK) || "{}")),
+    );
+  } catch {
+    return {};
+  }
+}
+
 /** Restrict imported styles to known, finite settings before applying them. */
 export function cleanSettings(input: unknown): Partial<Settings> {
   const out: Partial<Settings> = {};

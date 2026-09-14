@@ -1681,7 +1681,8 @@ input[type="range"]::-moz-range-thumb {
 }
 .toast {
   position: fixed;
-  bottom: 48px;
+  /* Top of the window, clear of the timeline it often talks about. */
+  top: 88px;
   left: 50%;
   transform: translateX(-50%);
   background: #333d2f;
@@ -2140,7 +2141,7 @@ input[type="range"]::-moz-range-thumb {
     right: 15px;
   }
   .toast {
-    bottom: 30px;
+    top: 70px;
     font-size: var(--text-control);
     width: max-content;
   }
@@ -2850,4 +2851,35 @@ html[data-view="countdown"] body {
     transform: scale(0.96);
     opacity: 0.85;
   }
+}
+
+/* Automatic edits: dashed so they read as suggestions, removable in one click. */
+.draggable-clip.auto {
+  border-style: dashed;
+}
+.clip-remove {
+  display: none;
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  line-height: 16px;
+  border-radius: 50%;
+  font-size: var(--text-label);
+  color: #1f2320;
+  background: #e8e3d6;
+}
+.draggable-clip.auto:hover .clip-remove,
+.draggable-clip.auto.selected .clip-remove,
+.draggable-clip.auto:focus-visible .clip-remove {
+  display: grid;
+  place-items: center;
+}
+.auto-edit {
+  margin: 0 0 22px;
+}
+.toast .button {
+  white-space: nowrap;
 }

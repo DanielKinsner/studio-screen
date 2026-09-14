@@ -53,7 +53,11 @@ export type Annotation = {
   intensity?: number;
 };
 export type Cut = { id: string; start: number; end: number };
-export type SpeedSection = Cut & { rate: number };
+export type SpeedSection = Cut & {
+  rate: number;
+  /** Added by the automatic edit; removable on its own or via Back to raw. */
+  auto?: boolean;
+};
 export type Settings = {
   background: string;
   color: string;
@@ -124,6 +128,8 @@ export type Project = {
   folder?: string;
   /** Streamed from disk instead of stored in the browser database. */
   videoUrl?: string;
+  /** Trim before the automatic edit, so Back to raw can restore it. */
+  autoEdit?: { trimStart: number; trimEnd: number };
   /** [seconds, changed share of the screen] for idle detection. */
   activity?: [number, number][];
   video?: Blob;
@@ -267,7 +273,10 @@ declare global {
           | { phase: "idle" },
       ) => Promise<void>;
       onCommand: (
-        cb: (command: "pause" | "resume" | "stop" | "discard") => void,
+        cb: (
+          command: "pause" | "resume" | "stop" | "discard",
+          bar?: { x: number; y: number; width: number; height: number },
+        ) => void,
       ) => () => void;
       native: {
         available: () => Promise<boolean>;

@@ -11,7 +11,11 @@ contextBridge.exposeInMainWorld("studioDesktop", {
   onPoint: (callback) => listen("studio:point", callback),
   onStop: (callback) => listen("studio:stop", callback),
   recordingUi: (state) => ipcRenderer.invoke("studio:recording-ui", state),
-  onCommand: (callback) => listen("studio:command", callback),
+  onCommand: (callback) => {
+    const handler = (_event, name, bar) => callback(name, bar);
+    ipcRenderer.on("studio:command", handler);
+    return () => ipcRenderer.removeListener("studio:command", handler);
+  },
   native: {
     available: () => ipcRenderer.invoke("studio:native-available"),
     start: (options) => ipcRenderer.invoke("studio:native-start", options),

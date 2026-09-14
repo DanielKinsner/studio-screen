@@ -117,13 +117,26 @@ const generateZooms = memo(
     demo: boolean,
     dismissed: string[],
     duration: number,
+    trimEnd: number,
     scale: number,
     response: number,
     mode: "2d" | "3d",
   ): Zoom[] => {
     const lead = zoomLead(response);
     const clicks: Click[] = (
-      demo ? demoClicks : points.filter((pt) => pt.click)
+      demo
+        ? demoClicks
+        : points.filter(
+            // Clicks outside the recorded area or after the edit ends (such
+            // as on the recording bar) never become zooms.
+            (pt) =>
+              pt.click &&
+              pt.t <= trimEnd &&
+              pt.x >= 0 &&
+              pt.x <= 1 &&
+              pt.y >= 0 &&
+              pt.y <= 1,
+          )
     )
       // Clicks inside a hand-placed zoom belong to that zoom.
       .filter(
@@ -188,6 +201,7 @@ export function autoZooms(p: Project): Zoom[] {
     p.demo,
     p.dismissedZooms || [],
     p.duration,
+    p.trimEnd,
     p.settings.zoomStrength,
     p.settings.cameraResponse,
     p.settings.motionMode,

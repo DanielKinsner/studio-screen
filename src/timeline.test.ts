@@ -37,6 +37,7 @@ describe("Non-destructive timeline", () => {
   it("generates zooms only from click evidence and keeps manual focus priority", () => {
     const p = newProject(false);
     p.duration = 20;
+    p.trimEnd = 20;
     p.points = [
       { t: 1, x: 0.2, y: 0.3 },
       { t: 3, x: 0.7, y: 0.4, click: true },
