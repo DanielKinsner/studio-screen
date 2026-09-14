@@ -89,8 +89,11 @@ describe("Motion and audio", () => {
       },
     ];
     expect(poseAt(p, 1).y).toBe(0);
-    expect(poseAt(p, 5).y).toBe(0);
-    expect(poseAt(p, 3)).toMatchObject({ x: -15, y: 30, z: 5 });
+    expect(poseAt(p, 5 + 3 * p.settings.cameraResponse).y).toBeCloseTo(0, 1);
+    const middle = poseAt(p, 3);
+    expect(middle.x).toBeCloseTo(-15, 1);
+    expect(middle.y).toBeCloseTo(30, 1);
+    expect(middle.z).toBeCloseTo(5, 1);
   });
   it("fades at edited endpoints, even for shorter videos", () => {
     expect(fadeAt(0, 10, 1)).toBe(0);

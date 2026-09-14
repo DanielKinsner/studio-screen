@@ -1,4 +1,4 @@
-import type { Caption, Point, Project, Zoom } from "./types";
+import type { Caption, Cut, Point, Project, SpeedSection, Zoom } from "./types";
 import { memo } from "./spring";
 export const clamp = (n: number, min: number, max: number) =>
   Math.min(max, Math.max(min, n));
@@ -27,23 +27,42 @@ export function speedAt(p: Project, t: number) {
     p.settings.speed
   );
 }
+const segmentsFor = memo(
+  (
+    cuts: Cut[],
+    speeds: SpeedSection[] | undefined,
+    trimStart: number,
+    trimEnd: number,
+    speed: number,
+  ) => {
+    const p = { cuts, speeds, trimStart, trimEnd, settings: { speed } };
+    return visibleSegments(p as Project).flatMap((segment) => {
+      const edges = [
+        ...new Set([
+          segment.start,
+          segment.end,
+          ...(speeds || [])
+            .flatMap((s) => [s.start, s.end])
+            .filter((t) => t > segment.start && t < segment.end),
+        ]),
+      ].sort((a, b) => a - b);
+      return edges.slice(0, -1).map((start, i) => ({
+        start,
+        end: edges[i + 1],
+        rate: speedAt(p as Project, start + 0.000001),
+      }));
+    });
+  },
+);
+/** Visible source ranges with their playback rate, in edit order. */
 export function playbackSegments(p: Project) {
-  return visibleSegments(p).flatMap((segment) => {
-    const edges = [
-      ...new Set([
-        segment.start,
-        segment.end,
-        ...(p.speeds || [])
-          .flatMap((s) => [s.start, s.end])
-          .filter((t) => t > segment.start && t < segment.end),
-      ]),
-    ].sort((a, b) => a - b);
-    return edges.slice(0, -1).map((start, i) => ({
-      start,
-      end: edges[i + 1],
-      rate: speedAt(p, start + 0.000001),
-    }));
-  });
+  return segmentsFor(
+    p.cuts,
+    p.speeds,
+    p.trimStart,
+    p.trimEnd,
+    p.settings.speed,
+  );
 }
 export function outputDuration(p: Project) {
   return playbackSegments(p).reduce(
@@ -68,17 +87,6 @@ export function outputTimeAt(p: Project, t: number) {
     elapsed += (s.end - s.start) / s.rate;
   }
   return elapsed;
-}
-export function zoomWeight(z: Zoom, t: number, ease = "smooth") {
-  const edge = Math.max(
-    0.001,
-    Math.min(
-      ease === "focused" ? 0.35 : ease === "gentle" ? 1.1 : 0.65,
-      (z.end - z.start) / 3,
-    ),
-  );
-  const v = clamp(Math.min((t - z.start) / edge, (z.end - t) / edge), 0, 1);
-  return ease === "focused" ? 1 - (1 - v) ** 3 : v * v * (3 - 2 * v);
 }
 /** Hold a zoom this long after the last click of a group. */
 export const AUTO_HOLD = 2.2;
