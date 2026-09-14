@@ -145,7 +145,7 @@ export const defaults: Settings = {
   cameraResponse: 0.6,
   cameraBounce: 0,
   motionBlur: 0,
-  followCursor: false,
+  followCursor: true,
   cursorStyle: "dark",
   cursorSmoothing: 0.08,
   cursorIdle: false,

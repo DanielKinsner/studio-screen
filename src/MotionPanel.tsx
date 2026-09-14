@@ -1,5 +1,11 @@
 import { Box, Focus, Plus, Sparkles, Trash2, ZoomIn } from "lucide-react";
-import type { Project, Zoom } from "./types";
+import { cameraFeel, type Project, type Zoom } from "./types";
+
+const feels = [
+  ["focused", "Snappy"],
+  ["smooth", "Smooth"],
+  ["gentle", "Floaty"],
+] as const;
 import { autoZooms, clamp, timecode } from "./timeline";
 import { tiltPresets } from "./motion";
 import { Slider, Toggle, IconButton } from "./Controls";
@@ -231,17 +237,23 @@ export default function MotionPanel({
           )}
           <details className="advanced-controls">
             <summary>Focus point</summary>
+            {(z.focus?.length || 0) > 1 && (
+              <p>
+                Follows {z.focus!.length} clicks. Moving the focus point pins it
+                to one spot.
+              </p>
+            )}
             <Slider
               label="Focus X"
               value={z.x * 100}
               unit="%"
-              onChange={(x) => update({ x: x / 100 })}
+              onChange={(x) => update({ x: x / 100, focus: undefined })}
             />
             <Slider
               label="Focus Y"
               value={z.y * 100}
               unit="%"
-              onChange={(y) => update({ y: y / 100 })}
+              onChange={(y) => update({ y: y / 100, focus: undefined })}
             />
             <p>These controls select the part of the recording to magnify.</p>
           </details>
@@ -270,24 +282,35 @@ export default function MotionPanel({
           onChange={(zoomStrength) => setting({ zoomStrength })}
         />
         <Toggle
-          label="Pan with cursor"
+          label="Follow cursor while zoomed"
           checked={s.followCursor}
           onChange={(followCursor) => setting({ followCursor })}
+          description="The camera moves when the pointer nears the edge of the view"
         />
-        <label className="select-field">
-          <span>Movement</span>
-          <select
-            aria-label="Movement style"
-            value={s.motionEase}
-            onChange={(e) =>
-              setting({ motionEase: e.target.value as typeof s.motionEase })
-            }
-          >
-            <option value="focused">Focused · quick settle</option>
-            <option value="smooth">Smooth · balanced</option>
-            <option value="gentle">Gentle · slow glide</option>
-          </select>
-        </label>
+        <div className="feel-field">
+          <span>
+            Camera feel
+            {s.motionEase === "custom" && <small>Custom</small>}
+          </span>
+          <div className="segmented" role="group" aria-label="Camera feel">
+            {feels.map(([ease, label]) => (
+              <button
+                key={ease}
+                className={s.motionEase === ease ? "active" : ""}
+                aria-pressed={s.motionEase === ease}
+                onClick={() =>
+                  setting({
+                    motionEase: ease,
+                    cameraResponse: cameraFeel[ease].response,
+                    cameraBounce: cameraFeel[ease].bounce,
+                  })
+                }
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
         <Slider
           label="Motion blur"
           value={s.motionBlur}
@@ -298,6 +321,30 @@ export default function MotionPanel({
           Motion blur samples the moving screen and cursor. The same effect is
           included in exports.
         </p>
+        <details className="advanced-controls">
+          <summary>Camera spring</summary>
+          <Slider
+            label="Move time"
+            value={s.cameraResponse}
+            min={0.2}
+            max={1.5}
+            step={0.05}
+            unit=" s"
+            onChange={(cameraResponse) =>
+              setting({ cameraResponse, motionEase: "custom" })
+            }
+          />
+          <Slider
+            label="Bounce"
+            value={Math.round(s.cameraBounce * 100)}
+            min={0}
+            max={40}
+            unit="%"
+            onChange={(bounce) =>
+              setting({ cameraBounce: bounce / 100, motionEase: "custom" })
+            }
+          />
+        </details>
       </details>
       <div className="section-title">
         <h2>Focus moments</h2>

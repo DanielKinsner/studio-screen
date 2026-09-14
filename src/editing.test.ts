@@ -11,7 +11,7 @@ import {
 import { poseAt } from "./motion";
 import { fadeAt, clickEvents } from "./sound";
 import { migrateProject } from "./storage";
-import { cleanSettings } from "./settings";
+import { cleanSettings, withCameraFeel } from "./settings";
 import { cameraFeel } from "./types";
 describe("Edited timing", () => {
   it("maps variable speeds and overlapping cuts in both directions", () => {
@@ -129,6 +129,18 @@ describe("Camera feel settings", () => {
       cameraResponse: 1.2,
       cameraBounce: 0.2,
     });
+  });
+  it("applies the matching spring when a look only names its movement style", () => {
+    expect(withCameraFeel({ motionEase: "focused", padding: 4 })).toEqual({
+      motionEase: "focused",
+      padding: 4,
+      cameraResponse: cameraFeel.focused.response,
+      cameraBounce: cameraFeel.focused.bounce,
+    });
+    expect(
+      withCameraFeel({ motionEase: "gentle", cameraResponse: 0.3 }),
+    ).toMatchObject({ cameraResponse: 0.3 });
+    expect(withCameraFeel({ padding: 4 })).toEqual({ padding: 4 });
   });
   it("clamps imported spring values", () => {
     expect(

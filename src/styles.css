@@ -962,6 +962,18 @@ kbd {
   background: #2a2e2d;
   border-color: #39403a;
 }
+.feel-field > span {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #a4aea6;
+  margin-bottom: 8px;
+}
+.feel-field small {
+  font-size: 9px;
+  color: #717d75;
+}
 .slider-field {
   display: block;
   margin: 0 0 20px;

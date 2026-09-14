@@ -1,4 +1,4 @@
-import { cleanSettings } from "./settings";
+import { cleanSettings, withCameraFeel } from "./settings";
 import { useRef, useState } from "react";
 import {
   ArrowDownToLine,
@@ -28,6 +28,9 @@ const styleKeys = [
   "motionMode",
   "motionIntensity",
   "motionEase",
+  "cameraResponse",
+  "cameraBounce",
+  "followCursor",
   "motionBlur",
   "cursorStyle",
   "cursorSize",
@@ -126,7 +129,10 @@ export function StylePresets({ project, edit, notify }: PanelProps) {
           <button
             key={p.name}
             onClick={() => {
-              edit((v) => ({ ...v, settings: { ...v.settings, ...p.value } }));
+              edit((v) => ({
+                ...v,
+                settings: { ...v.settings, ...withCameraFeel(p.value) },
+              }));
               notify(`${p.name} applied to canvas and automatic focus.`);
             }}
           >
@@ -167,7 +173,10 @@ export function StylePresets({ project, edit, notify }: PanelProps) {
             onClick={() =>
               edit((v) => ({
                 ...v,
-                settings: { ...v.settings, ...cleanSettings(p.settings) },
+                settings: {
+                  ...v.settings,
+                  ...withCameraFeel(cleanSettings(p.settings)),
+                },
               }))
             }
           >

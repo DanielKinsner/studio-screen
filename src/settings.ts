@@ -1,4 +1,4 @@
-import { defaults, type Settings } from "./types";
+import { cameraFeel, defaults, type Settings } from "./types";
 const limits: Partial<Record<keyof Settings, [number, number]>> = {
   padding: [0, 25],
   radius: [0, 40],
@@ -51,4 +51,14 @@ export function cleanSettings(input: unknown): Partial<Settings> {
     } else Object.assign(out, { [k]: value });
   }
   return out;
+}
+/** Looks saved before the spring camera only name a movement style; add its spring. */
+export function withCameraFeel(patch: Partial<Settings>): Partial<Settings> {
+  const feel = cameraFeel[patch.motionEase as keyof typeof cameraFeel];
+  if (!feel || patch.cameraResponse !== undefined) return patch;
+  return {
+    ...patch,
+    cameraResponse: feel.response,
+    cameraBounce: feel.bounce,
+  };
 }
