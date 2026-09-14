@@ -41,3 +41,11 @@ Camera and microphone recording are intentionally excluded. The sample project i
 - Production compilation and browser editing/export/persistence/mobile smoke pass. Capture and export resolution settings are unchanged; this update improves the native window and preview rendering.
 
 - Packaged DPI test and final portable launch/capture also pass. Artifact: `release/Studio Screen 0.2.1.exe`; 128272245 bytes; SHA-256 `5E66C9B0EED2963913471C5EE7F965D4B008A8C0CB4C93BC5FC02DF34D4A9AA5`. Unsigned local development build.
+
+## A1 — spring camera and cursor — 2026-09-14
+
+- 44 unit tests pass (was 14), including new `spring`, `cursorPath`, and `camera` suites: nearby zooms stay above 1.6× between them; automatic zooms glide to each click target; 600 shuffled scrub queries equal in-order playback exactly; frame-to-frame scale change and acceleration stay bounded (no jumps); scale settles to 1× within 3× move time after a zoom; a 2× speed section leaves zoom timing in edited time unchanged (within one frame); the smoothed cursor removes over 60% of synthetic hand jitter and lands on every click to 1e-6; rapid same-spot clicks become one focus, alternating corners are paced ≥ 0.4 s apart; older projects and looks get the spring matching their movement style.
+- Preview budget (`tests/a1-preview-perf.mjs`): a 10-minute 1280×720 source with 36,000 pointer samples, a click every 5 s, 3D and 25% motion blur, played in Edge at 2560×1400 CSS px, device scale 1.5 (2208×1242 canvas), RTX 4080 via D3D11. Before: 55.6 fps, 4.7% dropped frames. After: 59.9 fps, 0.2% dropped, p95 frame interval 16.8 ms. Rebuilding the camera path for that project after an edit takes about 47 ms in Node (3D, cursor following on); the cursor path about 13 ms; per-frame lookups about 1 µs.
+- `tests/a1-playback.mjs` passes and was shown to fail ("Pausing moved the playhead backwards") when the render loop's position was allowed to be overwritten by stale React state.
+- `npm run build`, `browser-smoke`, `v2-proof` (3D export frame difference 1.16/255, effect difference 16.4/255), `v2-visual`, and `v2-audio` pass after the change.
+- Not re-run for A1: native desktop capture, audio-proof, packaged and portable tests (capture, audio, and packaging code unchanged). The feel of the presets still needs Dan's hand test on a real recording.

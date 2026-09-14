@@ -1,4 +1,4 @@
-# Feature parity tracker — v0.2
+# Feature parity tracker — v0.2 + A1
 
 Reference review: 2026-09-14. The target is the combined screen-recording and editing workflow of Screen Studio and FocuSee, excluding camera and microphone capture. This application is independent and does not claim complete parity.
 
@@ -10,10 +10,11 @@ FocuSee's own [April 2026 update](https://focusee.imobie.com/news/focusee-2026-a
 | Custom region | Rectangle cropped before encoding, preserving internal audio | Native OS region overlay; pixel-entry controls |
 | Internal PC audio | Windows whole-PC loopback; stereo 48 kHz verified | Per-application isolation and driver/device matrix |
 | 3D zoom | Shared WebGL perspective renderer; manual X/Y/Z rotation, focus, offsets, FOV, four angle presets | Reference-product physical spring tuning and more presets |
-| Automatic 3D | Click-generated focus; recorded-pointer-driven tilt and optional pan | Native event hooks and unusual window geometry |
+| Automatic zoom | Nearby clicks grouped into one gliding zoom with focus keyframes; rapid/centred clicks coalesced; edge-triggered cursor following | Typing-triggered zoom (FocuSee); native event hooks |
+| Automatic 3D | Click-generated focus; spring-smoothed pointer-driven tilt | Unusual window geometry |
 | Motion blur | Three spatial samples of moving screen and cursor, used by preview and export | Adaptive/higher quality sampling; motion-cost optimization |
-| Motion styles | Focused, smooth, gentle easing | Custom spring physics |
-| Cursor effects | Dark/light/dot, scale, angle, smoothing, idle/timed hide, ring/pulse, synthesized click sound | Erasing the cursor baked into source pixels; native cursor assets |
+| Motion styles | Precomputed spring camera: Snappy/Smooth/Floaty, move time, bounce; identical when scrubbing, playing, exporting | Hand-tuning against the reference feel |
+| Cursor effects | Dark/light/dot, scale, angle, spring smoothing that lands on clicks, idle/timed hide, ring/pulse, synthesized click sound | Erasing the cursor baked into source pixels; native cursor assets |
 | Metadata | Display and live DWM-window coordinates; clicks, Ctrl/Alt/Win combinations and function keys; typing activity booleans | Polling can miss short events; high-DPI/multi-monitor matrix |
 | Shortcut overlays | Timed readable shortcut chips in preview/export; never stores plain typed text | Remapping/formatting UI; complete keyboard/layout coverage |
 | Timeline | Drag/move/resize focus, caption, element and speed sections; trim, cuts, undo/redo, keyboard editing | Multiple sources, reorder/ripple editing, exact frame scheduling |
@@ -30,4 +31,4 @@ FocuSee's own [April 2026 update](https://focusee.imobie.com/news/focusee-2026-a
 | Speaker notes | In-app notes during capture | Auto-scrolling/capture-excluded native teleprompter |
 | Mobile/cloud | Not implemented | Native mobile devices, public share links, analytics/embeds |
 
-Next priorities: disk-backed capture/recovery, native cursor suppression, deterministic export scheduling, and broader Windows display/driver testing. macOS/Linux behavior is not validated.
+Next priorities follow [docs/PLAN.md](docs/PLAN.md): A2 hide the app while recording, A3 frame-by-frame export, A4 Rust capture helper (cursor-free capture, input hooks, disk streaming), A5 auto-edit on stop. macOS/Linux behavior is not validated.
