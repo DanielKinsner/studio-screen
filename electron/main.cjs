@@ -564,6 +564,7 @@ app.whenReady().then(() => {
       fps: Math.max(10, Math.min(60, Math.round(+options?.fps || 60))),
       audio: options?.audio !== false,
       armed: true,
+      parent: process.pid,
       cursor: process.env.STUDIO_TEST_CAPTURE_CURSOR === "1",
     };
     const region = options?.region;

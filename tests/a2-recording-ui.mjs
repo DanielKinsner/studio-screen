@@ -103,7 +103,7 @@ async function record({ unprotected }) {
     console.log("bar visible; finishing");
     const barPage = app.windows().find((p) => p.url().includes("#bar"));
     await barPage.getByRole("button", { name: "Finish" }).click();
-    await page.getByText(/Recording ready/).waitFor({ timeout: 20000 });
+    await page.getByText(/Auto-edit:|Recording ready/).waitFor({ timeout: 20000 });
     await page.getByText("Saved locally", { exact: true }).waitFor();
     const after = await windows();
     const main = after.find((w) => w.title === "Studio Screen");

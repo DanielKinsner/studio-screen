@@ -61,6 +61,12 @@ struct Config {
     /// runs its countdown in between).
     #[serde(default)]
     armed: bool,
+    /// Process id of the app; if it disappears the take is finished at once.
+    #[serde(default)]
+    parent: Option<u32>,
+    /// Shift system audio against the picture (positive = later), in ms.
+    #[serde(default, rename = "audioOffsetMs")]
+    audio_offset_ms: f64,
 }
 fn sixty() -> u32 {
     60
@@ -76,8 +82,23 @@ enum Command {
     Stop,
 }
 
-fn commands() -> Receiver<Command> {
+fn commands(parent: Option<u32>) -> Receiver<Command> {
     let (tx, rx) = channel();
+    if let Some(pid) = parent {
+        // stdin can stay open after a crash if another process inherited the
+        // pipe, so also watch the app process itself.
+        let tx = tx.clone();
+        std::thread::spawn(move || unsafe {
+            use windows::Win32::System::Threading::{
+                OpenProcess, WaitForSingleObject, INFINITE, PROCESS_SYNCHRONIZE,
+            };
+            if let Ok(handle) = OpenProcess(PROCESS_SYNCHRONIZE, false, pid) {
+                WaitForSingleObject(handle, INFINITE);
+                let _ = windows::Win32::Foundation::CloseHandle(handle);
+                let _ = tx.send(Command::Stop);
+            }
+        });
+    }
     std::thread::spawn(move || {
         let stdin = std::io::stdin();
         for line in stdin.lock().lines() {
@@ -216,7 +237,7 @@ fn record(config: Config) -> Result<()> {
     let mut events = BufWriter::new(std::fs::File::create(&config.events).map_err(|e| {
         windows::core::Error::new(E_FAIL, format!("Could not create the event log: {e}"))
     })?);
-    let commands = commands();
+    let commands = commands(config.parent);
     let (hooks, inputs) = input::Hooks::start();
 
     // Start the clock on the first captured frame so t = 0 is a real picture.
@@ -272,6 +293,7 @@ fn record(config: Config) -> Result<()> {
     }));
 
     let interval = 10_000_000 / fps as i64;
+    let audio_offset = (config.audio_offset_ms.clamp(-500.0, 500.0) * 10_000.0) as i64;
     let mut next_video = 0i64;
     let mut written = 0u64;
     let mut audio_next = 0i64;
@@ -329,7 +351,7 @@ fn record(config: Config) -> Result<()> {
             if !paused {
                 for packet in packets {
                     let mut pcm = packet.pcm;
-                    let mut time = packet.time - base - paused_total;
+                    let mut time = packet.time - base - paused_total + audio_offset;
                     let length = pcm.len() as i64 / 4 * 10_000_000 / 48000;
                     if time + length <= audio_next {
                         continue;

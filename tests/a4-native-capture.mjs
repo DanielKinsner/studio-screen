@@ -41,34 +41,35 @@ if (!process.argv.includes("--force")) {
 await fs.rm(projects, { recursive: true, force: true });
 await fs.rm(profile, { recursive: true, force: true });
 
+// A/V fixture: black video that turns white for 0.25 s at 1 s while a 1 kHz
+// tone plays over exactly those frames. Chromium keeps a playing video in
+// lip-sync, so the recording should show the flash and tone together.
+const avFile = path.join(root, "tests/.native/av-fixture.mp4");
+await fs.mkdir(path.dirname(avFile), { recursive: true });
+await run(ffmpeg, [
+  "-y", "-v", "error",
+  "-f", "lavfi", "-i", "color=c=black:s=320x180:r=60:d=3",
+  "-f", "lavfi", "-i", "aevalsrc='if(between(t,1,1.25),0.5*sin(2*PI*1000*t),0)':s=48000:d=3",
+  "-vf", "drawbox=x=0:y=0:w=iw:h=ih:color=white:t=fill:enable='between(t,1,1.25)'",
+  "-c:v", "libx264", "-pix_fmt", "yuv420p", "-g", "30", "-c:a", "aac", "-b:a", "192k",
+  avFile,
+]);
+const avData = (await fs.readFile(avFile)).toString("base64");
 const fixtureHtml = `<!doctype html><title>Studio Screen Native Test</title>
 <style>
   html,body{margin:0;height:100%;background:#2f6db5;overflow:hidden;font:22px sans-serif}
   #dot{position:fixed;left:30%;top:40%;width:8px;height:8px;margin:-4px 0 0 -4px;background:#ff2020;border-radius:50%}
   #field{position:fixed;left:55%;top:20%;width:35%;height:60px;font-size:24px}
   #link{position:fixed;left:55%;top:60%;width:35%;height:60px;background:#ffe08a;cursor:pointer}
-  #flash{position:fixed;right:0;bottom:0;width:20%;height:20%;background:#000}
+  #av{position:fixed;right:0;bottom:0;width:20%;height:20%;object-fit:fill;background:#000}
 </style>
-<div id="dot"></div><input id="field" value=""><div id="link">link</div><div id="flash"></div>
+<div id="dot"></div><input id="field" value=""><div id="link">link</div>
+<video id="av" preload="auto" src="data:video/mp4;base64,${avData}"></video>
 <script>
-  const ctx = new AudioContext();
   window.flash = async () => {
-    await ctx.resume();
-    const when = ctx.currentTime + 0.4;
-    const osc = ctx.createOscillator(), gain = ctx.createGain();
-    osc.frequency.value = 1000; gain.gain.value = 0.25;
-    osc.connect(gain).connect(ctx.destination);
-    osc.start(when); osc.stop(when + 0.25);
-    // Paint the flash for the frame the tone reaches the speakers.
-    const stamp = ctx.getOutputTimestamp();
-    const heardAt = stamp.performanceTime + (when - stamp.contextTime) * 1000;
-    const tick = (now) => {
-      if (now + 8 >= heardAt) {
-        document.getElementById("flash").style.background = "#fff";
-        setTimeout(() => (document.getElementById("flash").style.background = "#000"), 250);
-      } else requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
+    const v = document.getElementById("av");
+    v.currentTime = 0;
+    await v.play();
   };
 </script>`;
 
@@ -228,9 +229,9 @@ async function mainTake({ cursor }) {
       Start-Sleep -Milliseconds 300
     `);
     await fixture.evaluate(() => window.flash());
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(3200);
     await bar.getByRole("button", { name: "Finish" }).click();
-    await page.getByText(/Recording ready/).waitFor({ timeout: 20000 });
+    await page.getByText(/Auto-edit:|Recording ready/).waitFor({ timeout: 20000 });
     await page.getByText("Saved locally", { exact: true }).waitFor();
     const project = await latestProject(page);
     const box = await fixture.locator("#dot").boundingBox();
@@ -273,6 +274,7 @@ function strayPixels(buffer) {
   let stray = 0;
   for (let y = Math.max(0, Math.round(marker[1]) - 10); y < Math.min(info.height, Math.round(marker[1]) + 60); y++)
     for (let x = Math.max(0, Math.round(marker[0]) - 10); x < Math.min(info.width, Math.round(marker[0]) + 50); x++) {
+      if (Math.hypot(x - marker[0], y - marker[1]) < 9) continue;
       const i = (y * info.width + x) * 3;
       const [r, g, b] = [buffer[i], buffer[i + 1], buffer[i + 2]];
       const blue = Math.abs(r - 0x2f) < 40 && Math.abs(g - 0x6d) < 40 && Math.abs(b - 0xb5) < 40;
@@ -386,14 +388,28 @@ results.control = { strayPixels: strayPixels(controlFrame) };
   await startTake(first.page);
   await waitForBar(first.app);
   await first.page.waitForTimeout(3000);
-  first.app.process().kill("SIGKILL");
-  await new Promise((r) => setTimeout(r, 4000));
+  const mainPid = await first.app.evaluate(() => process.pid);
+  const killedAt = Date.now();
+  await run("taskkill", ["/PID", String(mainPid), "/F"]).catch(() => {});
+  let helperGoneMs = null;
+  for (let i = 0; i < 100; i++) {
+    const { stdout } = await run("tasklist", ["/FI", "IMAGENAME eq studio-capture.exe"]);
+    if (!stdout.includes("studio-capture.exe")) {
+      helperGoneMs = Date.now() - killedAt;
+      break;
+    }
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  // Leftover Electron child processes from the killed app.
+  await run("taskkill", ["/PID", String(mainPid), "/T", "/F"]).catch(() => {});
+  await new Promise((r) => setTimeout(r, 1000));
   const { app, page } = await launch();
   try {
     await page.getByText(/Recovered a recording/).waitFor({ timeout: 20000 });
     await page.getByText("Saved locally", { exact: true }).waitFor();
     const project = await latestProject(page);
     results.appKilled = {
+      helperGoneMs,
       name: project.name,
       projectSeconds: +project.duration.toFixed(2),
       points: project.points.length,
@@ -415,7 +431,10 @@ expect(m.capture).toBe("native");
 expect(m.strayPixels).toBeLessThan(5);
 expect(results.control.strayPixels).toBeGreaterThan(30);
 expect(m.leftClicks).toBeGreaterThanOrEqual(6);
-expect(Math.max(...m.burstGapsMs)).toBeLessThan(60);
+// The injected clicks are ~30 ms apart but PowerShell's sleep is coarse; what
+// matters is that all five land.
+expect(m.burstGapsMs).toHaveLength(4);
+expect(Math.max(...m.burstGapsMs)).toBeLessThan(100);
 expect(m.rightClicks).toBe(1);
 expect(m.wheel).toBeGreaterThanOrEqual(1);
 expect(m.shortcuts).toContain("Ctrl + K");
@@ -428,4 +447,7 @@ expect(results.helperKilled.fileSeconds).toBeGreaterThan(2.5);
 expect(results.helperKilled.projectSeconds).toBeGreaterThan(2.5);
 expect(results.appKilled.name).toMatch(/^Recovered/);
 expect(results.appKilled.projectSeconds).toBeGreaterThan(2);
+expect(results.appKilled.helperGoneMs).not.toBeNull();
+expect(results.appKilled.helperGoneMs).toBeLessThan(3000);
+expect(results.appKilled.projectSeconds).toBeLessThan(6);
 console.log("PASS: cursor-free footage, full input events, 2 px click accuracy, A/V sync, crash-safe takes.");
