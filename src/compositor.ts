@@ -1,7 +1,14 @@
 import { backgrounds } from "./types";
 import type { Project } from "./types";
 import { clamp } from "./timeline";
-import { cameraAt, cursorOpacity, smoothPointer, poseAt } from "./motion";
+import {
+  cameraAt,
+  clickAt,
+  cursorOpacity,
+  smoothPointer,
+  shortcutAt,
+  poseAt,
+} from "./motion";
 import { PerspectiveRenderer } from "./perspective";
 type Media = {
   video?: HTMLVideoElement | null;
@@ -335,9 +342,7 @@ function drawScreen(
     c.save();
     c.globalAlpha = cursorOpacity(p, t);
     c.translate(point.x * fw, point.y * fh);
-    const click = p.demo
-      ? [5, 14].find((n) => t >= n && t < n + 0.5)
-      : p.points.find((pt) => pt.click && t >= pt.t && t < pt.t + 0.5)?.t;
+    const click = clickAt(p, t);
     if (s.cursorHighlight && click !== undefined) {
       c.beginPath();
       c.arc(0, 0, ((12 + (t - click) * 45) * h) / 720, 0, 7);
@@ -506,17 +511,7 @@ function drawOverlays(canvas: HTMLCanvasElement, p: Project, t: number) {
   }
 
   c.shadowBlur = 0;
-  const key =
-    s.showShortcuts &&
-    (p.demo
-      ? [
-          { t: 6, shortcut: "Ctrl + K" },
-          { t: 15, shortcut: "Ctrl + S" },
-        ]
-      : p.points
-    )
-      .filter((pt) => pt.shortcut && t >= pt.t && t < pt.t + 1.8)
-      .at(-1);
+  const key = s.showShortcuts ? shortcutAt(p, t) : undefined;
   if (key) {
     c.font = `500 ${h * 0.025}px "Segoe UI",sans-serif`;
     const kw = c.measureText(key.shortcut!).width + h * 0.045;

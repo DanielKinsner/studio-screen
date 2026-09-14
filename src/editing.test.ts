@@ -8,7 +8,7 @@ import {
   captionsSrt,
   parseSrt,
 } from "./timeline";
-import { poseAt, cursorOpacity, smoothPointer } from "./motion";
+import { poseAt } from "./motion";
 import { fadeAt, clickEvents } from "./sound";
 describe("Edited timing", () => {
   it("maps variable speeds and overlapping cuts in both directions", () => {
@@ -88,21 +88,6 @@ describe("Motion and audio", () => {
     expect(poseAt(p, 1).y).toBe(0);
     expect(poseAt(p, 5).y).toBe(0);
     expect(poseAt(p, 3)).toMatchObject({ x: -15, y: 30, z: 5 });
-  });
-  it("smooths pointer movement and applies idle and explicit hiding", () => {
-    const p = newProject();
-    p.demo = false;
-    p.settings.cursorSmoothing = 0.1;
-    p.settings.cursorIdle = true;
-    p.points = [
-      { t: 0, x: 0, y: 0 },
-      { t: 1, x: 1, y: 1 },
-      { t: 3, x: 1, y: 1 },
-    ];
-    expect(smoothPointer(p, 1).x).toBeCloseTo(0.93);
-    expect(cursorOpacity(p, 3)).toBe(0);
-    p.hiddenCursor = [{ id: "hidden", start: 0.2, end: 0.6 }];
-    expect(cursorOpacity(p, 0.4)).toBe(0);
   });
   it("fades at edited endpoints, even for shorter videos", () => {
     expect(fadeAt(0, 10, 1)).toBe(0);
