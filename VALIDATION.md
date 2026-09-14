@@ -49,3 +49,34 @@ Camera and microphone recording are intentionally excluded. The sample project i
 - `tests/a1-playback.mjs` passes and was shown to fail ("Pausing moved the playhead backwards") when the render loop's position was allowed to be overwritten by stale React state.
 - `npm run build`, `browser-smoke`, `v2-proof` (3D export frame difference 1.16/255, effect difference 16.4/255), `v2-visual`, and `v2-audio` pass after the change.
 - Not re-run for A1: native desktop capture, audio-proof, packaged and portable tests (capture, audio, and packaging code unchanged). The feel of the presets still needs Dan's hand test on a real recording.
+
+## Readability pass — 2026-09-14
+
+- Screenshots at 2560×1400 CSS px / scale 1.5 (4K at 150%) and 1480×980 of every inspector tab and the export dialog; no overflowing text leaf elements; 390 px mobile width has no horizontal overflow. `browser-smoke`, `v2-visual`, `a1-playback`, build pass.
+
+## A2 — recording gets out of the way — 2026-09-14
+
+- `tests/a2-recording-ui.mjs` passed with **browser capture** (before the helper existed): countdown window seen, editor hidden during countdown, bar visible, editor visible and focused after Finish, no leftover windows; magenta test bar: 0 marker pixels and no black box in the protected take, 1,143 marker pixels in the control take with exclusion off.
+- **Not yet re-run with the capture helper** (the test was updated for native recordings but needs an idle PC).
+- `tests/desktop-capture.mjs` (browser-capture fallback, pause/resume through the bar, metadata, export) passed.
+
+## A3 — frame-by-frame export — 2026-09-14
+
+- `tests/a3-export.mjs` passed: 60 s 1080p60 project with 3D and 25% motion blur exported in 23.0 s in Edge (2.6× real time); exactly 3,600 frames with 16.667 ms spacing; H.264 + AAC; decoded frame at 15.5 s vs the compositor: 2.19/255 mean difference; cuts + 2× section → exactly 480 frames, 8.000 s audio, 439 Hz tone in normal speed and 440.7 Hz in the 2× section (pitch preserved); cancel → AbortError and no file; desktop export with the window minimized finished in 23.1 s with 3,600 frames; cancelled desktop export left no file.
+- `v2-proof` (3D export 2.13/255, exact 2.000 s), `v2-audio` (fades), `export-formats` (MP4, GIF, `.studio` round-trip) pass on the new exporter.
+- Portable build (`npm run desktop:pack`) succeeds and bundles `resources/studio-capture.exe`. The packaged app itself was not launched in this session.
+
+## A4 — capture helper — 2026-09-14
+
+- `npm run native:check` on the RTX 4080 PC: capture, borderless (access status 4), dirty regions, hardware H.264, loopback audio all available.
+- Helper smoke take (3 s, 4K60, with a pause): H.264 High 3840×2160 60 fps + AAC; video 2.033 s and audio 2.028 s; pointer, cursor-shape and dirty-region events logged.
+- `tests/a4-native-capture.mjs`, first clean run (PC idle): window capture 1332×950; recorded click landed **0.5 px** from the red marker; 6 left clicks (5-click burst + 1), 1 right-click, 1 wheel, "Ctrl + K", 4 typing events, cursor shapes text/pointer/arrow; killing the helper kept the take (3.91 s file, 4.01 s project); app kill recovered on relaunch. Failed assertions in that run: stray-pixel count 40 vs 308 in the cursor-baked control (the marker's anti-aliased rim; the check now excludes it), A/V offset 34 ms with a hand-timed fixture (replaced with a real synced video), and the app-kill take ran 13.8 s because orphaned Electron processes held the helper's stdin open.
+- Fix verified in a later run: the helper now watches the app's process and was gone **383 ms** after the app was killed; recovered take 3.31 s. That later run was disturbed by someone using the PC (stray input), so its other numbers don't count.
+- `tests/a4-av-sync.mjs` (browser plays a clip with flash + 1 kHz tone on the same frames; helper records the display): clean idle run **47, 48, 49, 51, 49 ms** (sound behind picture, mean 49). With `audioOffsetMs: -49` one clean-ish run measured mean −1 ms (−25, 9, 7, −8, 10) before the silence-fill fix; runs after the fix were disturbed by PC use. **The −49 ms correction is not applied by the app yet** (the helper supports the setting; Electron doesn't pass it).
+- Not run: `tests/a4-soak.mjs` (30-minute memory check), a clean full pass of `tests/a4-native-capture.mjs`.
+
+## A5 — auto-edit on stop — 2026-09-14
+
+- 7 `autoEdit` unit tests (trim to first action and bar reach, hotkey stop, typing/idle speed-ups, caret blinks ignored, short takes raw, no clicks, Back to raw and re-apply); 61 unit tests in total pass.
+- Browser check on a 40 s project: Apply automatic edit → "3 zooms · 1 typing speed-up · 1 idle speed-up", dashed automatic clips, × removed one speed-up, Back to raw removed all automatic clips.
+- Not run: `tests/a5-open-speed.mjs` (5-minute take opens auto-edited within 3 s) — needs an idle PC.
