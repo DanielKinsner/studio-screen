@@ -617,6 +617,18 @@ export default function App() {
   }, [selected, edit]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
+      // Esc lets go of the selection unless a text field or menu wants it.
+      if (
+        e.key === "Escape" &&
+        !modal &&
+        !recording &&
+        !(e.target as HTMLElement).closest(
+          'textarea,select,[contenteditable="true"],input:not([type="range"]):not([type="color"])',
+        )
+      ) {
+        setSelected(null);
+        return;
+      }
       if (
         (e.target as HTMLElement).closest(
           'input,textarea,select,[contenteditable="true"]',
@@ -1064,8 +1076,11 @@ export default function App() {
     );
     setPlaying(false);
     seekTo(next);
-    if (e.type === "pointerdown")
+    if (e.type === "pointerdown") {
+      // Clips, cuts and buttons stop their own presses, so this is empty space.
+      setSelected(null);
       e.currentTarget.setPointerCapture(e.pointerId);
+    }
   };
   return (
     <div
@@ -1209,7 +1224,16 @@ export default function App() {
               </button>
             </div>
           </div>
-          <div className="preview-area">
+          <div
+            className="preview-area"
+            onPointerDown={(e) => {
+              const target = e.target as HTMLElement;
+              if (target.closest("button, .preview-control")) return;
+              // With an element selected, a press on the frame places it.
+              if (chosenAnnotation && target.closest(".preview-frame")) return;
+              setSelected(null);
+            }}
+          >
             <div className="preview-halo" />
             <div
               className={`preview-frame ${chosenAnnotation ? "targeting" : ""}`}
