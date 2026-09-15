@@ -34,10 +34,11 @@ What changed since 0.3.0, in Dan's words from the first hand test:
 | Cutting | 16 edit unit tests; `cutting` browser test (split, gap, ripple, restore, razor, snapping, edge drags, one-step undo); A3 exports a gap + ripple with exactly 270 frames for 9 s | Real recordings; whether the fit-to-width timeline feels right |
 | Typing zoom | 7 unit tests; A5 toast shows typing zooms ("36 zooms") | Taste |
 | Focus dot, Alt tilt | 7 mapping unit tests; `focus-dot` browser test; `alt-tilt` desktop test (the menu bar no longer appears on Alt) | Feel |
+| Browser-recording export (WebM) | `webm-export`: 4 of 6 checked seconds were the empty card before the fix, 0 after (whole take and a trim starting mid-cluster); the real 9/15 fallback recordings re-export with picture throughout; `export-formats`, `browser-smoke`, `v2-audio`, `v2-proof` pass | A3 not re-run after this fix (MP4 path unchanged) |
 | Build | 0.4.0 portable packed; bundled helper hash matches; packaged smoke passes on the portable and unpacked app (footer shows v0.4.0) | — |
 | Native capture | `native:check` all ✔; A2 passed (0 bar pixels vs 1,069 control); A5 passed (386 ms auto-edit, 845 ms first frame); A4 clicks 0.5 px, cursor 0 px, crash recovery passed | **A/V sync: see heads-up below** |
 
-### Heads-up: three things the run could not close
+### Heads-up: what the run could not close, and fixes since
 
 1. **Sound measures ~60 ms late on the office PC; this is not a regression from yesterday.**
    - **Today's numbers:** the helper's own sync test (`tests/a4-av-sync.mjs`) measured 57 ms this morning, then 59, 67 and 63 ms in the afternoon. A4's single-flash check measured 66 then 58 ms (limit 20).
@@ -47,7 +48,7 @@ What changed since 0.3.0, in Dan's words from the first hand test:
    - No offset was added. Evidence: VALIDATION.md, "A/V sync follow-up".
 2. **A3 export speed is load-sensitive.** Every A3 run passed on correctness (exact frames, audio, pitch, cancel). The 60 s export beat its 30 s budget in five runs (20.5–25.9 s) and missed it in others (30–40 s) while Codex and Premiere were loading the PC. A side-by-side of old and new code showed the same spread (23–49 s), so it isn't a slowdown from this work.
 3. **`tests/desktop-capture.mjs` is repaired and passes again** (9/15 13:51, both the window and `--region` variants; `audio-proof` and `export-formats` pass on the files it writes). It now expects the auto-edit toast and an export streamed to `tests/.exports`, and it no longer types or clicks on the PC: the browser-capture fallback records no clicks or keys by design (the helper does that), and none at all for a window.
-4. **Bug found by that run, not fixed: exporting a browser-captured WebM shows only its first ~1 s.** Every later frame is the empty card; sound is fine. Native MP4 recordings (the normal path) are unaffected. Cause: MediaRecorder WebMs have no index and keyframes only every ~5 s, and mediabunny 1.56.2's lookup jumps straight to the one-second cluster it remembers, finds no keyframe there, and gives up instead of looking earlier. The same file remuxed with an index returns every frame. It slipped through because `export-formats` exports only 1 s of that file and `desktop-capture` checks the export's size, not its pictures.
+4. **Fixed: exporting a browser recording with sound showed only its first ~1 s** (then the empty card). Found by that run; native MP4 recordings were never affected. Cause: those WebMs have no index, keyframes seconds apart and a new cluster every second, and mediabunny 1.56.2's lookup by time gives up when a frame's keyframe is in an earlier cluster. The exporter now reads WebM frames in order instead (MP4 keeps the fast lookup). Pinned by `tests/webm-export.mjs`, which fails on the old code. Browser recordings without sound were never affected (their clusters start at keyframes).
 
 ## Dan's hand test for 0.4.0
 
@@ -99,9 +100,8 @@ Tell me: which zoom lead feels right, whether typing zooms are welcome, how the 
 
 1. Dan's hand test above.
 2. A/V sync on the office PC (no offsets): next, run the sync test once with Windows output switched away from the Realtek speakers, to see whether the ~60 ms follows the audio device. Dan switches the device himself; the test needs a 2-minute break. If it doesn't follow the device, log the helper's frame and loopback timestamps in a diagnostic copy (ask before touching the helper). Worth one run on the 9/14 PC too, to confirm it still measures about 0 ms.
-3. Fix exporting browser-captured WebMs (heads-up 4), with a test that exports the whole file and checks its pictures.
-4. Tune defaults from Dan's answers (zoom lead, typing zoom).
-5. Still unverified from before: the separate 30-minute/4K soak and timed 4K60 export.
+3. Tune defaults from Dan's answers (zoom lead, typing zoom).
+4. Still unverified from before: the separate 30-minute/4K soak and timed 4K60 export.
 
 ## Setup on any machine
 
