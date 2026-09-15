@@ -10,6 +10,7 @@ import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { audioFilter, flashFilter, flashTimes, pairOffsets } from "./av-measure.mjs";
 
 const run = promisify(execFile);
 const root = process.cwd();
@@ -42,22 +43,33 @@ const data = (await fs.readFile(clip)).toString("base64");
 const browser = await chromium.launch({
   channel: "msedge",
   headless: false,
-  args: ["--window-position=0,0", "--window-size=700,500", "--autoplay-policy=no-user-gesture-required"],
+  args: ["--window-position=0,0", "--start-fullscreen", "--autoplay-policy=no-user-gesture-required"],
 });
-const page = await browser.newPage({ viewport: { width: 640, height: 360 } });
-await page.setContent(
-  `<body style="margin:0;background:#000"><video id="v" style="width:640px;height:360px" preload="auto" src="data:video/mp4;base64,${data}"></video></body>`,
-);
+let helper;
 const output = path.join(dir, "av-sync.mp4"),
   events = path.join(dir, "av-sync.jsonl");
+try {
+const page = await browser.newPage({ viewport: null });
+const cdp = await page.context().newCDPSession(page);
+const { windowId } = await cdp.send("Browser.getWindowForTarget");
+await cdp.send("Browser.setWindowBounds", { windowId, bounds: { windowState: "normal" } });
+await cdp.send("Browser.setWindowBounds", { windowId, bounds: { left: 0, top: 0, width: 700, height: 500 } });
+await cdp.send("Browser.setWindowBounds", { windowId, bounds: { windowState: "fullscreen" } });
+console.log("Fixture window:", await cdp.send("Browser.getWindowBounds", { windowId }));
+await page.setContent(
+  `<body style="margin:0;background:#000;overflow:hidden"><video id="v" style="width:100vw;height:100vh;object-fit:fill" preload="auto" src="data:video/mp4;base64,${data}"></video></body>`,
+);
 const config = { output, events, monitor: { x: 50, y: 50 }, fps: 60, audio: true };
 if (flag("--offset-ms")) config.audioOffsetMs = Number(flag("--offset-ms"));
-const helper = spawn("native/studio-capture/target/release/studio-capture.exe", ["record", JSON.stringify(config)], {
+helper = spawn("native/studio-capture/target/release/studio-capture.exe", ["record", JSON.stringify(config)], {
   stdio: ["pipe", "pipe", "inherit"],
 });
-await new Promise((resolve) => {
+await new Promise((resolve, reject) => {
+  const timeout = setTimeout(() => reject(new Error("Helper did not start in 20 seconds")), 20000);
+  helper.once("error", (error) => { clearTimeout(timeout); reject(error); });
+  helper.once("exit", (code) => { clearTimeout(timeout); reject(new Error(`Helper exited before startup: ${code}`)); });
   helper.stdout.on("data", (d) => {
-    if (String(d).includes('"started"')) resolve();
+    if (String(d).includes('"started"')) { clearTimeout(timeout); resolve(); }
   });
 });
 await page.bringToFront();
@@ -75,33 +87,29 @@ helper.stdin.write("stop\n");
 await new Promise((r) => helper.on("exit", r));
 await browser.close();
 
-// Brightness of the top-left area (where the clip plays) per recorded frame.
+// Fullscreen fixture: sample the central region independent of display DPI.
 const probe = await run(ffmpeg, ["-i", output]).catch((e) => e);
 const [, w, h] = /, (\d{3,5})x(\d{3,5})/.exec(probe.stderr);
 const width = +w,
   height = +h;
 const frames = await new Promise((resolve) => {
-  const p = spawn(ffmpeg, ["-v", "error", "-i", output, "-vf", "crop=800:400:100:250,scale=32:18", "-f", "rawvideo", "-pix_fmt", "gray", "-"]);
+  const p = spawn(ffmpeg, ["-v", "error", "-i", output, "-vf", flashFilter, "-f", "rawvideo", "-pix_fmt", "gray", "-"]);
   const chunks = [];
   p.stdout.on("data", (c) => chunks.push(c));
   p.on("close", () => resolve(Buffer.concat(chunks)));
 });
-const brightness = [];
-for (let f = 0; f * 576 < frames.length; f++) {
-  let sum = 0;
-  for (let i = 0; i < 576; i++) sum += frames[f * 576 + i];
-  brightness.push(sum / 576);
-}
 const pcm = await new Promise((resolve) => {
-  const p = spawn(ffmpeg, ["-v", "error", "-i", output, "-vn", "-ac", "1", "-ar", "48000", "-f", "f32le", "-"]);
+  const p = spawn(ffmpeg, ["-v", "error", "-i", output, "-vn", "-af", audioFilter, "-ac", "1", "-ar", "48000", "-f", "f32le", "-"]);
   const chunks = [];
   p.stdout.on("data", (c) => chunks.push(c));
   p.on("close", () => resolve(Buffer.concat(chunks)));
 });
 const samples = new Float32Array(pcm.buffer, pcm.byteOffset, Math.floor(pcm.length / 4));
-const flashes = [];
-for (let f = 1; f < brightness.length; f++)
-  if (brightness[f] > 128 && brightness[f - 1] <= 128) flashes.push(f / 60);
+const flashes = flashTimes(frames);
+const frameMeans = [];
+for (let i = 0; i + 576 <= frames.length; i += 576)
+  frameMeans.push(frames.subarray(i, i + 576).reduce((a, b) => a + b, 0) / 576);
+console.log("Sampled brightness:", { frames: frameMeans.length, min: Math.min(...frameMeans), max: Math.max(...frameMeans) });
 const tones = [];
 let loud = false;
 for (let i = 0; i + 240 < samples.length; i += 48) {
@@ -111,25 +119,26 @@ for (let i = 0; i + 240 < samples.length; i += 48) {
   if (on && !loud) tones.push(i / 48000);
   loud = on;
 }
-const offsets = flashes
-  .slice(1)
-  .map((t) => {
-    const tone = tones.find((s) => Math.abs(s - t) < 0.3);
-    return tone === undefined ? null : Math.round((tone - t) * 1000);
-  })
-  .filter((v) => v !== null);
-const mean = offsets.reduce((a, b) => a + b, 0) / (offsets.length || 1);
-const result = { frameSize: [width, height], flashes: flashes.length, tones: tones.length, offsetsMs: offsets, meanMs: Math.round(mean), audioOffsetMs: config.audioOffsetMs ?? 0 };
+const { offsetsMs: offsets, meanMs: mean } = pairOffsets(flashes, tones);
+console.log("Onsets:", { flashes, tones });
+const result = { frameSize: [width, height], flashes: flashes.length, tones: tones.length, offsetsMs: offsets, meanMs: mean === null ? null : Math.round(mean), audioOffsetMs: config.audioOffsetMs ?? 0 };
 await fs.writeFile(path.join(root, "tests/a4-av-sync-results.json"), JSON.stringify(result, null, 2));
 await fs.rm(output, { force: true });
 await fs.rm(events, { force: true });
 console.log(result);
 if (offsets.length < 3) {
   console.log("FAIL: could not pair enough flashes with tones.");
-  process.exit(1);
-}
-if (Math.abs(mean) > 20) {
+  process.exitCode = 1;
+} else if (Math.abs(mean) > 20) {
   console.log(`FAIL: sound is ${Math.round(mean)} ms ${mean > 0 ? "behind" : "ahead of"} the picture.`);
-  process.exit(1);
+  process.exitCode = 1;
+} else console.log(`PASS: audio and video within ${Math.round(Math.abs(mean))} ms on average.`);
+} finally {
+  if (helper && helper.exitCode === null && helper.signalCode === null) {
+    helper.kill();
+    await new Promise((resolve) => helper.once("exit", resolve));
+  }
+  await browser.close();
+  await fs.rm(output, { force: true });
+  await fs.rm(events, { force: true });
 }
-console.log(`PASS: audio and video within ${Math.round(Math.abs(mean))} ms on average.`);
