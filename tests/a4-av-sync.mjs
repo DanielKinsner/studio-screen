@@ -5,12 +5,13 @@
 // (positive = sound later than picture). Waits for an idle PC because it
 // shows a window and plays sound. `--offset-ms N` passes an audio offset to
 // the helper to try a calibration.
-import { chromium } from "@playwright/test";
+import { _electron as electron } from "@playwright/test";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { audioFilter, flashFilter, flashTimes, pairOffsets } from "./av-measure.mjs";
+import { waitForExit } from "./process-exit.mjs";
 
 const run = promisify(execFile);
 const root = process.cwd();
@@ -40,29 +41,45 @@ await run(ffmpeg, [
 ]);
 const data = (await fs.readFile(clip)).toString("base64");
 
-const browser = await chromium.launch({
-  channel: "msedge",
-  headless: false,
-  args: ["--window-position=0,0", "--start-fullscreen", "--autoplay-policy=no-user-gesture-required"],
+const browser = await electron.launch({
+  args: ["tests/sync-fixture.cjs"],
+  cwd: root,
 });
 let helper;
+let helperExit;
 const output = path.join(dir, "av-sync.mp4"),
   events = path.join(dir, "av-sync.jsonl");
 try {
-const page = await browser.newPage({ viewport: null });
-const cdp = await page.context().newCDPSession(page);
-const { windowId } = await cdp.send("Browser.getWindowForTarget");
-await cdp.send("Browser.setWindowBounds", { windowId, bounds: { windowState: "normal" } });
-await cdp.send("Browser.setWindowBounds", { windowId, bounds: { left: 0, top: 0, width: 700, height: 500 } });
-await cdp.send("Browser.setWindowBounds", { windowId, bounds: { windowState: "fullscreen" } });
-console.log("Fixture window:", await cdp.send("Browser.getWindowBounds", { windowId }));
+const page = await browser.firstWindow();
+await page.waitForFunction(() => document.title === "Studio Screen Sync Fixture");
+const fixture = await browser.evaluate(({ BrowserWindow, screen }) => {
+  const window = BrowserWindow.getAllWindows()[0];
+  const bounds = window.getBounds();
+  return { bounds, visible: window.isVisible(), alwaysOnTop: window.isAlwaysOnTop(),
+    monitor: screen.dipToScreenPoint({ x: bounds.x + Math.round(bounds.width / 2), y: bounds.y + Math.round(bounds.height / 2) }) };
+});
+console.log("Fixture window:", fixture);
 await page.setContent(
   `<body style="margin:0;background:#000;overflow:hidden"><video id="v" style="width:100vw;height:100vh;object-fit:fill" preload="auto" src="data:video/mp4;base64,${data}"></video></body>`,
 );
-const config = { output, events, monitor: { x: 50, y: 50 }, fps: 60, audio: true };
+const config = { output, events, monitor: fixture.monitor, fps: 60, audio: true };
 if (flag("--offset-ms")) config.audioOffsetMs = Number(flag("--offset-ms"));
 helper = spawn("native/studio-capture/target/release/studio-capture.exe", ["record", JSON.stringify(config)], {
   stdio: ["pipe", "pipe", "inherit"],
+});
+helperExit = waitForExit(helper);
+helper.stdin.on("error", () => {}); // The observed exit reports an early helper failure.
+let pending = "";
+helper.stdout.on("data", (data) => {
+  pending += data.toString();
+  const lines = pending.split("\n");
+  pending = lines.pop();
+  for (const line of lines) {
+    try {
+      const message = JSON.parse(line);
+      if (["error", "stopped"].includes(message.event)) console.log("Helper:", message);
+    } catch {}
+  }
 });
 await new Promise((resolve, reject) => {
   const timeout = setTimeout(() => reject(new Error("Helper did not start in 20 seconds")), 20000);
@@ -76,15 +93,23 @@ await page.bringToFront();
 await page.waitForTimeout(800);
 // Six plays; the first warms up the decoder and audio device and is ignored.
 for (let i = 0; i < 6; i++) {
+  if (helper.exitCode !== null || helper.signalCode !== null)
+    throw new Error(`Helper exited before all six plays: ${JSON.stringify(await helperExit)}`);
+  const playStarted = Date.now();
   await page.evaluate(() => {
     const v = document.getElementById("v");
     v.currentTime = 0;
     return v.play();
   });
   await page.waitForTimeout(2300);
+  const { stdout: idle } = await run("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "tests/idle.ps1"]);
+  if (!Number.isFinite(Number(idle.trim())) || Number(idle.trim()) < (Date.now() - playStarted) / 1000 - 0.2)
+    throw new Error("INVALID RUN: PC input resumed during sync capture; recording discarded.");
 }
-helper.stdin.write("stop\n");
-await new Promise((r) => helper.on("exit", r));
+if (helper.exitCode === null && helper.signalCode === null) helper.stdin.write("stop\n");
+const exit = await helperExit;
+if (exit.code !== 0) throw new Error(`Capture helper failed: ${JSON.stringify(exit)}`);
+await browser.evaluate(({ app }) => app.exit(0)).catch(() => {});
 await browser.close();
 
 // Fullscreen fixture: sample the central region independent of display DPI.
@@ -126,8 +151,8 @@ await fs.writeFile(path.join(root, "tests/a4-av-sync-results.json"), JSON.string
 await fs.rm(output, { force: true });
 await fs.rm(events, { force: true });
 console.log(result);
-if (offsets.length < 3) {
-  console.log("FAIL: could not pair enough flashes with tones.");
+if (flashes.length !== 6 || offsets.length !== 5) {
+  console.log("FAIL: expected six flashes and five measured pairs after warmup.");
   process.exitCode = 1;
 } else if (Math.abs(mean) > 20) {
   console.log(`FAIL: sound is ${Math.round(mean)} ms ${mean > 0 ? "behind" : "ahead of"} the picture.`);
@@ -136,9 +161,10 @@ if (offsets.length < 3) {
 } finally {
   if (helper && helper.exitCode === null && helper.signalCode === null) {
     helper.kill();
-    await new Promise((resolve) => helper.once("exit", resolve));
+    await waitForExit(helper);
   }
-  await browser.close();
+  await browser.evaluate(({ app }) => app.exit(0)).catch(() => {});
+  await browser.close().catch(() => {});
   await fs.rm(output, { force: true });
   await fs.rm(events, { force: true });
 }

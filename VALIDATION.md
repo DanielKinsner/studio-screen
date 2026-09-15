@@ -95,6 +95,12 @@ Camera and microphone recording are intentionally excluded. The sample project i
 - Regression: `cargo test --release --manifest-path native/studio-capture/Cargo.toml --bin studio-capture` first failed with the old 20 ms threshold (0 vs 480 missing frames), then passed **2/2** after the fix. `node tests/audio-gap.mjs` passed the actual AAC encoder control/corrected comparison (**0.9200208 vs 1.0000208 s**) using only synthetic media. No screen capture or audio playback is used by that test.
 - Temporary format logging in `native:check` confirmed 48 kHz stereo PCM was accepted here; fallback-format conversion is not involved in this run. Debug instrumentation and an unrun continuous-playback experiment were removed. **Post-fix native A/V sync, full native end-to-end, and an uninterrupted five-minute soak remain pending an idle PC.** The synthetic fix does not establish a final real-screen sync offset or a green native suite.
 
+### Continued idle-gated verification — 2026-09-14
+
+- Kept the sync test queued until the idle guard accepted 60 s. The first post-fix browser run still measured no flashes (sampled brightness 20.97–21.08/255), with nine tone detections; no valid offset was produced. The fixture now uses a dedicated borderless, always-on-top Electron window and obtains its physical monitor point from that window, avoiding browser placement/foreground assumptions.
+- A later run recorded only **9.328 s** before the helper exited. The test then hung because it registered its exit listener after the exit had already happened. The partial recording was not counted as a sync result; its recording and event log were deleted, and the test-owned fixture processes were cleaned up. The helper's early-exit cause was not captured by the old harness.
+- The test now observes helper exit from startup, handles an already-exited process, reports helper errors, requires all six flashes/five post-warmup pairs, exits its fixture explicitly, and discards a run if input resumes during capture. The process-exit regression first timed out with the old listener-only implementation, then passed. **65 JavaScript tests and production build passed.** Native verification remains queued for idle time; these harness changes are not a native sync pass.
+
 ### Earlier evidence (original PC)
 
 - `npm run native:check` on the RTX 4080 PC: capture, borderless (access status 4), dirty regions, hardware H.264, loopback audio all available.
