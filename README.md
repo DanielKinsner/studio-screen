@@ -81,6 +81,8 @@ node tests/focus-dot.mjs             # focus dot, aim view, wheel, Alt-drag tilt
 node tests/alt-tilt.mjs              # desktop: Alt never shows the menu bar; tilt; shortcuts
 node tests/a1-preview-perf.mjs
 node tests/a3-export.mjs
+node tests/audio-gap.mjs            # helper + real AAC encoder, synthetic audio only
+node tests/audio-clock.mjs          # helper's loopback capture keeps every sample (silent, 20 s, needs Rust + ffplay)
 # These record the screen and/or move the mouse; they wait for an idle PC:
 node tests/a2-recording-ui.mjs
 node tests/a4-native-capture.mjs

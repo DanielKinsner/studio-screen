@@ -353,22 +353,18 @@ fn record(config: Config) -> Result<()> {
                 for packet in packets {
                     let mut pcm = packet.pcm;
                     let mut time = packet.time - base - paused_total + audio_offset;
-                    let length = pcm.len() as i64 / 4 * 10_000_000 / 48000;
-                    if time + length <= audio_next {
-                        continue;
-                    }
-                    if time < audio_next {
+                    match audio_timeline::align(audio_next, time, pcm.len() / 4) {
+                        audio_timeline::Align::Drop => continue,
+                        // The stream is continuous; the stamp only jittered.
+                        audio_timeline::Align::Contiguous => time = audio_next,
                         // Trim the part already written (e.g. right after a resume).
-                        let skip = (((audio_next - time) * 48000 + 9_999_999) / 10_000_000) as usize;
-                        if skip * 4 >= pcm.len() {
-                            continue;
+                        audio_timeline::Align::Trim(skip) => {
+                            pcm.drain(0..skip * 4);
+                            time = audio_next;
                         }
-                        pcm.drain(0..skip * 4);
-                        time = audio_next;
-                    }
-                    let gap = audio_timeline::gap_frames(audio_next, time);
-                    if gap > 0 {
-                        encoder.write_audio(&vec![0u8; gap * 4], audio_next)?;
+                        audio_timeline::Align::Fill(gap) => {
+                            encoder.write_audio(&vec![0u8; gap * 4], audio_next)?;
+                        }
                     }
                     audio_next = time + encoder.write_audio(&pcm, time)?;
                 }
