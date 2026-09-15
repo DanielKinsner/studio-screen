@@ -8,7 +8,8 @@ import { promisify } from "node:util";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-const run = promisify(execFile);
+const exec = promisify(execFile);
+const run = (file, args, options = {}) => exec(file, args, { windowsHide: true, ...options });
 const root = process.cwd();
 const minutes =
   Number(process.argv[process.argv.indexOf("--minutes") + 1]) || 30;
@@ -43,7 +44,7 @@ const helper = spawn(
       audio: true,
     }),
   ],
-  { stdio: ["pipe", "pipe", "inherit"] },
+  { stdio: ["pipe", "pipe", "inherit"], windowsHide: true },
 );
 let last = {};
 let startedEvent = {}, pending = "";

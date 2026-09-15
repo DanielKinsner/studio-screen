@@ -17,7 +17,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { audioFilter } from "./av-measure.mjs";
 
-const run = promisify(execFile);
+const exec = promisify(execFile);
+const run = (file, args, options = {}) => exec(file, args, { windowsHide: true, ...options });
 const root = process.cwd();
 const bin = "C:/Program Files (x86)/Common Files/AutoPod/ffmpeg/bin";
 const ffmpeg = process.env.FFMPEG_PATH || `${bin}/ffmpeg.exe`;
@@ -145,14 +146,16 @@ async function waitForBar(app) {
   return app.windows().find((p) => p.url().includes("#bar"));
 }
 async function input(script) {
+  // The entire injection thread must be per-monitor DPI aware. Changing only
+  // cursor placement still misdirects clicks/typing on the 150% display.
   await run(
     "powershell.exe",
     [
       "-NoProfile",
       "-NonInteractive",
       "-Command",
-      `Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;public class T{[DllImport("user32.dll")]public static extern bool SetProcessDPIAware();[DllImport("user32.dll")]public static extern bool SetCursorPos(int x,int y);[DllImport("user32.dll")]public static extern void keybd_event(byte k,byte s,uint f,UIntPtr e);[DllImport("user32.dll")]public static extern void mouse_event(uint f,uint x,uint y,int d,UIntPtr e);}'
-      [T]::SetProcessDPIAware() | Out-Null
+      `Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;public class T{[DllImport("user32.dll")]public static extern IntPtr SetThreadDpiAwarenessContext(IntPtr c);[DllImport("user32.dll")]public static extern bool SetPhysicalCursorPos(int x,int y);[DllImport("user32.dll")]public static extern void keybd_event(byte k,byte s,uint f,UIntPtr e);[DllImport("user32.dll")]public static extern void mouse_event(uint f,uint x,uint y,int d,UIntPtr e);}'
+      [T]::SetThreadDpiAwarenessContext([IntPtr](-4)) | Out-Null
       ${script}`,
     ],
     { windowsHide: true },
@@ -174,7 +177,7 @@ async function latestProject(page) {
 }
 function decode(args) {
   return new Promise((resolve, reject) => {
-    const p = spawn(ffmpeg, ["-v", "error", ...args, "-"]);
+    const p = spawn(ffmpeg, ["-v", "error", ...args, "-"], { windowsHide: true });
     const chunks = [];
     p.stdout.on("data", (c) => chunks.push(c));
     p.on("error", reject);
@@ -193,6 +196,7 @@ async function videoInfo(file) {
 }
 
 const results = {};
+try {
 
 // ---- Main take ------------------------------------------------------------
 async function mainTake({ cursor }) {
@@ -209,7 +213,7 @@ async function mainTake({ cursor }) {
     await page.waitForTimeout(800);
     const clickedAt = Date.now();
     await input(`
-      [T]::SetCursorPos(${dot.x},${dot.y}) | Out-Null
+      [T]::SetPhysicalCursorPos(${dot.x},${dot.y}) | Out-Null
       Start-Sleep -Milliseconds 700
       for($i=0;$i -lt 5;$i++){ [T]::mouse_event(2,0,0,0,[UIntPtr]::Zero); Start-Sleep -Milliseconds 15; [T]::mouse_event(4,0,0,0,[UIntPtr]::Zero); Start-Sleep -Milliseconds 15 }
       Start-Sleep -Milliseconds 300
@@ -218,15 +222,15 @@ async function mainTake({ cursor }) {
       Start-Sleep -Milliseconds 200
       [T]::mouse_event(0x0800,0,0,-120,[UIntPtr]::Zero)
       Start-Sleep -Milliseconds 200
-      [T]::SetCursorPos(${field.x},${field.y}) | Out-Null
+      [T]::SetPhysicalCursorPos(${field.x},${field.y}) | Out-Null
       Start-Sleep -Milliseconds 300
       [T]::mouse_event(2,0,0,0,[UIntPtr]::Zero); [T]::mouse_event(4,0,0,0,[UIntPtr]::Zero)
       Start-Sleep -Milliseconds 200
       [T]::keybd_event(17,0,0,[UIntPtr]::Zero); [T]::keybd_event(75,0,0,[UIntPtr]::Zero); Start-Sleep -Milliseconds 60; [T]::keybd_event(75,0,2,[UIntPtr]::Zero); [T]::keybd_event(17,0,2,[UIntPtr]::Zero)
       foreach($k in 65,66,67,68){ [T]::keybd_event($k,0,0,[UIntPtr]::Zero); Start-Sleep -Milliseconds 70; [T]::keybd_event($k,0,2,[UIntPtr]::Zero); Start-Sleep -Milliseconds 90 }
-      [T]::SetCursorPos(${link.x},${link.y}) | Out-Null
+      [T]::SetPhysicalCursorPos(${link.x},${link.y}) | Out-Null
       Start-Sleep -Milliseconds 400
-      [T]::SetCursorPos(${dot.x},${dot.y}) | Out-Null
+      [T]::SetPhysicalCursorPos(${dot.x},${dot.y}) | Out-Null
       Start-Sleep -Milliseconds 300
     `);
     await fixture.evaluate(() => window.flash());
@@ -452,3 +456,7 @@ expect(results.appKilled.helperGoneMs).not.toBeNull();
 expect(results.appKilled.helperGoneMs).toBeLessThan(3000);
 expect(results.appKilled.projectSeconds).toBeLessThan(6);
 console.log("PASS: cursor-free footage, full input events, 2 px click accuracy, A/V sync, crash-safe takes.");
+} finally {
+  // Also remove captures when fixture/input setup fails before the assertions.
+  await fs.rm(projects, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+}

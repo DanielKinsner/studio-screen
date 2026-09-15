@@ -13,7 +13,8 @@ import path from "node:path";
 import { audioFilter, flashFilter, flashTimes, pairOffsets } from "./av-measure.mjs";
 import { waitForExit } from "./process-exit.mjs";
 
-const run = promisify(execFile);
+const exec = promisify(execFile);
+const run = (file, args, options = {}) => exec(file, args, { windowsHide: true, ...options });
 const root = process.cwd();
 const ffmpeg =
   process.env.FFMPEG_PATH ||
@@ -65,6 +66,7 @@ await page.setContent(
 const config = { output, events, monitor: fixture.monitor, fps: 60, audio: true };
 if (flag("--offset-ms")) config.audioOffsetMs = Number(flag("--offset-ms"));
 helper = spawn("native/studio-capture/target/release/studio-capture.exe", ["record", JSON.stringify(config)], {
+  windowsHide: true,
   stdio: ["pipe", "pipe", "inherit"],
 });
 helperExit = waitForExit(helper);
@@ -104,7 +106,7 @@ for (let i = 0; i < 6; i++) {
   await page.waitForTimeout(2300);
   const { stdout: idle } = await run("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "tests/idle.ps1"]);
   if (!Number.isFinite(Number(idle.trim())) || Number(idle.trim()) < (Date.now() - playStarted) / 1000 - 0.2)
-    throw new Error("INVALID RUN: PC input resumed during sync capture; recording discarded.");
+    throw new Error(`INVALID RUN: PC input resumed during sync capture (idle ${idle.trim()} s); recording discarded.`);
 }
 if (helper.exitCode === null && helper.signalCode === null) helper.stdin.write("stop\n");
 const exit = await helperExit;
@@ -118,13 +120,13 @@ const [, w, h] = /, (\d{3,5})x(\d{3,5})/.exec(probe.stderr);
 const width = +w,
   height = +h;
 const frames = await new Promise((resolve) => {
-  const p = spawn(ffmpeg, ["-v", "error", "-i", output, "-vf", flashFilter, "-f", "rawvideo", "-pix_fmt", "gray", "-"]);
+  const p = spawn(ffmpeg, ["-v", "error", "-i", output, "-vf", flashFilter, "-f", "rawvideo", "-pix_fmt", "gray", "-"], { windowsHide: true });
   const chunks = [];
   p.stdout.on("data", (c) => chunks.push(c));
   p.on("close", () => resolve(Buffer.concat(chunks)));
 });
 const pcm = await new Promise((resolve) => {
-  const p = spawn(ffmpeg, ["-v", "error", "-i", output, "-vn", "-af", audioFilter, "-ac", "1", "-ar", "48000", "-f", "f32le", "-"]);
+  const p = spawn(ffmpeg, ["-v", "error", "-i", output, "-vn", "-af", audioFilter, "-ac", "1", "-ar", "48000", "-f", "f32le", "-"], { windowsHide: true });
   const chunks = [];
   p.stdout.on("data", (c) => chunks.push(c));
   p.on("close", () => resolve(Buffer.concat(chunks)));
