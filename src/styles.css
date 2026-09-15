@@ -324,6 +324,8 @@ p {
   color: #eaece6;
 }
 .editor {
+  /* The timeline's resting height; the resize handle sets --timeline-height. */
+  --timeline-default: 278px;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -530,12 +532,49 @@ p {
   font-size: var(--text-label);
 }
 .timeline-section {
-  height: 250px;
+  height: var(--timeline-height, var(--timeline-default));
+  min-height: var(--timeline-default);
+  max-height: max(var(--timeline-default), 70%);
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
   border-top: 1px solid var(--line);
   background: #1d1f21;
 }
+.timeline-resize {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -6px;
+  height: 11px;
+  z-index: 6;
+  cursor: row-resize;
+  touch-action: none;
+}
+.timeline-resize::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 4px;
+  width: 42px;
+  height: 3px;
+  border-radius: 2px;
+  transform: translateX(-50%);
+  background: var(--orange);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.timeline-resize:hover::after,
+.timeline-resize:focus-visible::after,
+.timeline-resize.dragging::after {
+  opacity: 0.85;
+}
+.timeline-resize:focus-visible {
+  outline: none;
+}
 .timeline-toolbar {
+  flex-shrink: 0;
   height: 44px;
   border-bottom: 1px solid #2b2e30;
   padding: 0 18px;
@@ -577,24 +616,32 @@ p {
   font-size: var(--text-lead);
   color: #9ea6a2;
 }
+/* Rows share the timeline's height in fixed proportions and grow together:
+   at the resting height the ruler is 30px, the screen track 44 and every
+   other track 29 (a 1px border plus 28 shares). The last 7px leave room for
+   the horizontal scrollbar. Labels mirror the rows exactly. */
 .timeline-body {
   display: flex;
-  height: 168px;
+  flex: 1;
+  min-height: 0;
+  container-type: size;
   padding-right: 25px;
 }
 .track-labels {
   width: 128px;
+  height: calc(100cqh - 7px);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   padding-left: 24px;
 }
 .track-labels > div {
-  height: 30px;
-  flex-shrink: 0;
+  flex: 0 0 30px;
 }
 .track-labels > span {
-  height: 31px;
+  flex: 28 1 0;
+  min-height: 0;
+  border-bottom: 1px solid transparent;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -602,7 +649,8 @@ p {
   font-size: var(--text-caption);
 }
 .track-labels > span:nth-child(2) {
-  height: 44px;
+  flex-grow: 44;
+  border-bottom: 0;
 }
 .tracks-scroll {
   min-width: 0;
@@ -614,13 +662,15 @@ p {
   padding-right: 3px;
 }
 .tracks {
-  height: 100%;
+  height: calc(100cqh - 7px);
+  display: flex;
+  flex-direction: column;
   position: relative;
   cursor: crosshair;
   touch-action: none;
 }
 .time-ruler {
-  height: 30px;
+  flex: 0 0 30px;
   position: relative;
   border-bottom: 1px solid #2b3030;
   background: repeating-linear-gradient(
@@ -647,14 +697,14 @@ p {
   transform: translateX(-100%);
 }
 .screen-track {
-  height: 44px;
+  flex: 44 1 0;
+  min-height: 0;
   position: relative;
-  padding-top: 5px;
 }
 .screen-clip {
   position: absolute;
   top: 5px;
-  height: 34px;
+  bottom: 5px;
   border: 1px solid #b2c29d;
   border-radius: 4px;
   overflow: hidden;
@@ -710,7 +760,8 @@ p {
 .zoom-track,
 .caption-track,
 .annotation-track {
-  height: 29px;
+  flex: 28 1 0;
+  min-height: 0;
   position: relative;
   border-bottom: 1px solid #2a2f2c44;
 }
@@ -719,7 +770,7 @@ p {
 .annotation-clip {
   position: absolute;
   top: 3px;
-  height: 22px;
+  bottom: 3px;
   border: 1px solid #61766b;
   border-radius: 4px;
   background: #3b5046;
@@ -761,7 +812,7 @@ p {
     #392a2be0 8px
   );
   top: 5px;
-  height: 34px;
+  bottom: 5px;
   z-index: 2;
   color: #ffc6b6;
   border: 1px solid #ae6352;
@@ -788,6 +839,7 @@ p {
   clip-path: polygon(0 0, 100% 0, 100% 65%, 50% 100%, 0 65%);
 }
 .timeline-footer {
+  flex-shrink: 0;
   height: 36px;
   border-top: 1px solid #2d3330;
   padding: 0 22px;
@@ -1799,12 +1851,6 @@ input[type="range"]::-moz-range-thumb {
   .preview-area {
     padding: 18px 55px 0;
   }
-  .timeline-section {
-    height: 265px;
-  }
-  .timeline-body {
-    height: 182px;
-  }
   .tool {
     font-size: var(--text-label);
     min-height: 67px;
@@ -2024,9 +2070,6 @@ input[type="range"]::-moz-range-thumb {
     font-size: var(--text-label);
     min-width: 74px;
     margin-left: 4px;
-  }
-  .timeline-section {
-    height: 245px;
   }
   .timeline-toolbar {
     padding: 0 9px;
@@ -2613,14 +2656,15 @@ input[type="range"]::-moz-range-thumb {
   background: #f2b18f66;
 }
 .speed-track {
-  height: 29px;
+  flex: 28 1 0;
+  min-height: 0;
   position: relative;
   border-bottom: 1px solid #2a2f2c44;
 }
 .speed-clip {
   position: absolute;
   top: 3px;
-  height: 22px;
+  bottom: 3px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2634,19 +2678,6 @@ input[type="range"]::-moz-range-thumb {
 .speed-clip.selected {
   border-color: #efb494;
   box-shadow: 0 0 0 1px #efb494;
-}
-.timeline-section {
-  height: 278px;
-}
-.timeline-body {
-  height: 196px;
-}
-.track-labels > span {
-  height: 29px;
-  flex-shrink: 0;
-}
-.track-labels > span:nth-child(2) {
-  height: 44px;
 }
 .timeline-button,
 .track-labels > span,
@@ -2686,12 +2717,6 @@ input[type="range"]::-moz-range-thumb {
   }
 }
 @media (max-width: 760px) {
-  .timeline-section {
-    height: 278px;
-  }
-  .timeline-body {
-    height: 196px;
-  }
   .track-labels > span {
     font-size: var(--text-caption);
   }

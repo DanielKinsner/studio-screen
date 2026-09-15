@@ -152,3 +152,23 @@ Commit: `ceb6811`.
 - If the app is killed mid-export, a `.partial` file can remain next to the target (the original is untouched).
 - Raw IPC error text ("Error invoking remote method…") is still shown for disk errors, as before.
 
+Commit: `43bc10c`.
+
+## Slice 8: Resizable timeline (R11)
+
+**Shipped:** a row-resize handle (`role="separator"`, "Resize timeline") straddling the top border of `.timeline-section`: drag to resize between the resting height and 70% of the editor, double-click resets, Up/Down arrows step 20 px when focused; remembered in `localStorage["studio-timeline-height"]` (try/catch). One CSS variable drives it: `.editor { --timeline-default: 278px }`, `.timeline-section { height: var(--timeline-height, var(--timeline-default)); max-height: max(default, 70%) }`. Tracks and labels are flex columns sized from the body (`container-type: size`, `100cqh`), so rows grow together; clips use top/bottom insets instead of fixed heights. New `tests/timeline-resize.mjs` (README → Tests).
+
+**Verification:**
+- `node tests/timeline-resize.mjs` failed first (no handle), then PASS at both sizes:
+  - **1920×1080:** resting 278 px (screen row 44, zoom row 29, label 29, clip 22; preview 507 px tall). Dragged up 200 px → **478 px**, zoom row 64.9 = label 64.9, clip 57.9, screen row 100.4, preview **307 px** with its bottom 34 px above the playback bar, no horizontal overflow. Same after reload; double-click → 278 / 44 / 29 again.
+  - **1366×768:** resting identical; drag clamped to **463 px** (70% of the 662 px editor), zoom row 62.2, preview 56 px, no overflow; kept after reload; double-click resets.
+  - Screenshots `tests/timeline-resize-1920.png` / `-1366.png` (git-ignored) checked by eye: aligned labels and rows, nothing clipped.
+- `npm test` 84 passed; `npm run build` OK; `browser-smoke` (includes the 390 px mobile overflow check), `a1-playback`, `editor-interactions`, `scrub-frames`, `v2-visual` (mobile overflow), `v2-proof` (clip drag on the zoom row) PASS.
+
+**Deviations / judgment calls:**
+- **Plan claim that didn't match the code:** the duplicated heights (250/168 base, 265/182 at ≥1600 px, 245 at ≤850 px) were all dead. The later unconditional `278px`/`196px` rules come after the media queries (which add no specificity), so the real default was 278 px at every breakpoint. Consolidating to one 278 px default therefore changes no breakpoint's look; the test pins the resting sizes exactly.
+- Rows keep their proportions rather than being exactly equal ("available height ÷ track count" taken literally would change the resting look): the screen row keeps its 44:29 ratio to other rows as they grow. The first measurement drifted (screen 46.8 px, rows 28.5 px, labels off by 0.7 px) because flex bases can't go below padding and borders; fixed by removing the screen row's unused `padding-top`, sharing borders consistently, and weighting rows 44/28 with a 1 px border.
+- The bottom 7 px of the timeline body stay free for the horizontal scrollbar (as the old 6 px of slack did), so labels and rows stay aligned when the timeline is zoomed in.
+- Resizing is a layout preference, not a project edit, so it is not part of undo.
+- At 1366×768 the 70% cap leaves a 56 px preview. Allowed by the plan ("even at the expense of the preview").
+

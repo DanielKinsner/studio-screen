@@ -263,6 +263,17 @@ export default function App() {
   const [exportedPath, setExportedPath] = useState<string | null>(null);
   const [mediaVersion, setMediaVersion] = useState(0);
   const [timelineScale, setTimelineScale] = useState(1);
+  // Timeline height dragged by hand; null is the resting height from CSS.
+  const [timelineHeight, setTimelineHeight] = useState<number | null>(() => {
+    try {
+      const saved = Number(localStorage.getItem("studio-timeline-height"));
+      return saved > 0 ? saved : null;
+    } catch {
+      return null;
+    }
+  });
+  const timelineRef = useRef<HTMLElement>(null);
+  const timelineDrag = useRef<{ y: number; height: number } | null>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const video = useRef<HTMLVideoElement | null>(null);
   // The paused preview holds its last good picture while seeks land, and
@@ -1107,6 +1118,28 @@ export default function App() {
       setMediaVersion((n) => n + 1);
     }
   }
+  /** Set the timeline height within its resting height and 70% of the editor. */
+  const sizeTimeline = (height: number | null, remember = false) => {
+    const section = timelineRef.current,
+      editor = section?.parentElement;
+    let next: number | null = null;
+    if (section && editor && height !== null) {
+      const base =
+        parseFloat(
+          getComputedStyle(section).getPropertyValue("--timeline-default"),
+        ) || 278;
+      next = Math.round(
+        clamp(height, base, Math.max(base, editor.clientHeight * 0.7)),
+      );
+      if (next <= base) next = null;
+    }
+    setTimelineHeight(next);
+    if (remember)
+      try {
+        if (next === null) localStorage.removeItem("studio-timeline-height");
+        else localStorage.setItem("studio-timeline-height", String(next));
+      } catch {}
+  };
   const chosenAnnotation = project.annotations.find((a) => a.id === selected),
     chosenCut = project.cuts.find((c) => c.id === selected);
   const scrub = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -1383,7 +1416,60 @@ export default function App() {
               </IconButton>
             </div>
           </div>
-          <section className="timeline-section" aria-label="Video timeline">
+          <section
+            className="timeline-section"
+            aria-label="Video timeline"
+            ref={timelineRef}
+            style={
+              timelineHeight
+                ? ({
+                    "--timeline-height": `${timelineHeight}px`,
+                  } as React.CSSProperties)
+                : undefined
+            }
+          >
+            <div
+              className="timeline-resize"
+              role="separator"
+              aria-orientation="horizontal"
+              aria-label="Resize timeline"
+              aria-valuenow={timelineHeight ?? undefined}
+              tabIndex={0}
+              title="Drag to resize the timeline · double-click to reset"
+              onPointerDown={(e) => {
+                e.preventDefault();
+                e.currentTarget.setPointerCapture(e.pointerId);
+                e.currentTarget.classList.add("dragging");
+                timelineDrag.current = {
+                  y: e.clientY,
+                  height: timelineRef.current!.getBoundingClientRect().height,
+                };
+              }}
+              onPointerMove={(e) => {
+                const drag = timelineDrag.current;
+                if (drag) sizeTimeline(drag.height + drag.y - e.clientY);
+              }}
+              onPointerUp={(e) => {
+                const drag = timelineDrag.current;
+                timelineDrag.current = null;
+                e.currentTarget.classList.remove("dragging");
+                if (drag)
+                  sizeTimeline(drag.height + drag.y - e.clientY, true);
+              }}
+              onPointerCancel={(e) => {
+                timelineDrag.current = null;
+                e.currentTarget.classList.remove("dragging");
+              }}
+              onDoubleClick={() => sizeTimeline(null, true)}
+              onKeyDown={(e) => {
+                if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+                e.preventDefault();
+                e.stopPropagation();
+                const current =
+                  timelineRef.current!.getBoundingClientRect().height;
+                sizeTimeline(current + (e.key === "ArrowUp" ? 20 : -20), true);
+              }}
+            />
             <div className="timeline-toolbar">
               <div>
                 <button className="timeline-button" onClick={addCut}>
