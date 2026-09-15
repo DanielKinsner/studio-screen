@@ -1,6 +1,7 @@
 //! Windows Graphics Capture: a monitor or window, without the cursor or the
 //! yellow capture border, cropped on the GPU.
 use crate::util::SendBox;
+use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use windows::core::{IInspectable, Interface, Result, HSTRING};
 use windows::Foundation::Metadata::ApiInformation;
@@ -77,14 +78,16 @@ pub struct Crop {
     pub height: u32,
 }
 
+/// Captured frames wait here, in order, until the recording loop drains them.
+/// A stall longer than this many refreshes loses the oldest (counted).
+pub const QUEUE_DEPTH: usize = 12;
+
 #[derive(Default)]
 pub struct Frames {
-    /// Most recent captured frame, already cropped into its own texture.
-    pub latest: Option<ID3D11Texture2D>,
-    pub latest_time: i64,
+    /// (capture time in QPC 100 ns, cropped texture, changed share 0..1).
+    pub queue: VecDeque<(i64, ID3D11Texture2D, f64)>,
     pub captured: u64,
-    /// Changed share of the recorded area since the last drain (dirty regions).
-    pub changed: f64,
+    pub dropped: u64,
     pub closed: bool,
     pub error: Option<String>,
     size: SizeInt32,
@@ -285,10 +288,12 @@ pub fn start(
                         content,
                     )?;
                 }
-                state.latest = Some(target);
-                state.latest_time = time;
+                state.queue.push_back((time, target, changed.min(1.0)));
+                if state.queue.len() > QUEUE_DEPTH {
+                    state.queue.pop_front();
+                    state.dropped += 1;
+                }
                 state.captured += 1;
-                state.changed += changed.min(1.0);
                 let _ = device;
                 Ok(())
             })();

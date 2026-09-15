@@ -79,7 +79,6 @@ fn main() -> windows::core::Result<()> {
             if gap > 0 {
                 filled += gap as u64;
                 gaps += 1;
-                audio_next += gap * 10_000_000 / 48000;
             }
             audio_next = time + len * 10_000_000 / 48000;
         }

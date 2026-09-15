@@ -13,6 +13,7 @@ mod capture;
 mod encoder;
 mod input;
 mod util;
+mod video_timeline;
 
 use serde::Deserialize;
 use serde_json::json;
@@ -23,6 +24,7 @@ use std::time::{Duration, Instant};
 use util::{emit, qpc};
 use windows::core::Result;
 use windows::Win32::Foundation::*;
+use windows::Win32::Graphics::Direct3D11::ID3D11Texture2D;
 use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_EXTENDED_FRAME_BOUNDS};
 use windows::Win32::Graphics::Gdi::*;
 use windows::Win32::Media::MediaFoundation::{MFStartup, MFSTARTUP_FULL, MF_VERSION};
@@ -222,6 +224,7 @@ fn record(config: Config) -> Result<()> {
     let capture = capture::start(&gpu, &target, region, config.cursor)?;
     let crop = capture.crop;
     let fps = config.fps.clamp(10, 60);
+    let interval = 10_000_000 / fps as i64;
     let loopback = if config.audio {
         audio::Loopback::open().ok()
     } else {
@@ -243,7 +246,7 @@ fn record(config: Config) -> Result<()> {
 
     // Start the clock on the first captured frame so t = 0 is a real picture.
     let waited = Instant::now();
-    while capture.frames.lock().unwrap().latest.is_none() {
+    while capture.frames.lock().unwrap().queue.is_empty() {
         if waited.elapsed() > Duration::from_secs(3) {
             hooks.stop();
             return Err(windows::core::Error::new(
@@ -273,14 +276,20 @@ fn record(config: Config) -> Result<()> {
                 _ => {}
             }
         }
-        // Throw away pointer and key events from the warm-up.
+        // Throw away pointer and key events from the warm-up. Warm-up frames
+        // stay queued: the newest one is the picture at t = 0.
         while inputs.try_recv().is_ok() {}
-        capture.frames.lock().unwrap().changed = 0.0;
     }
     if let Some(l) = &loopback {
         l.start()?;
     }
-    let base = qpc();
+    // t = 0 sits half a slot before a screen refresh, so refreshes land
+    // mid-slot instead of on a boundary (see video_timeline).
+    let base = {
+        let frames = capture.frames.lock().unwrap();
+        let stamp = frames.queue.back().map(|(t, _, _)| *t).unwrap_or_else(qpc);
+        video_timeline::aligned_base(qpc(), stamp, interval)
+    };
     emit(json!({
         "event": "started",
         "width": crop.width,
@@ -293,9 +302,10 @@ fn record(config: Config) -> Result<()> {
         "adapter": gpu.adapter,
     }));
 
-    let interval = 10_000_000 / fps as i64;
     let audio_offset = (config.audio_offset_ms.clamp(-500.0, 500.0) * 10_000.0) as i64;
-    let mut next_video = 0i64;
+    let mut slots: video_timeline::Slotter<ID3D11Texture2D> = video_timeline::Slotter::new(interval);
+    // STUDIO_CAPTURE_TRACE=1 prints every frame stamp and slot to stderr (cadence diagnosis).
+    let trace = std::env::var_os("STUDIO_CAPTURE_TRACE").is_some();
     let mut written = 0u64;
     let mut audio_next = 0i64;
     let mut paused_since: Option<i64> = None;
@@ -379,25 +389,35 @@ fn record(config: Config) -> Result<()> {
             }
         }
 
+        // Constant frame rate, filled by each frame's own capture time.
+        let batch: Vec<_> = capture.frames.lock().unwrap().queue.drain(..).collect();
+        for (stamp, texture, changed) in batch {
+            if paused {
+                slots.set_current(texture, 0.0);
+                continue;
+            }
+            let t = stamp - base - paused_total;
+            if trace {
+                eprintln!("F {t} {changed:.4} {}", now - t);
+            }
+            slots.push(t, texture, if t < 0 { 0.0 } else { changed });
+        }
         if !paused {
-            // Constant frame rate: each slot shows the newest captured picture.
-            while now >= next_video {
-                let (texture, changed) = {
-                    let mut frames = capture.frames.lock().unwrap();
-                    (frames.latest.clone(), std::mem::take(&mut frames.changed))
-                };
-                if let Some(texture) = texture {
-                    encoder.write_video(&texture, next_video, interval)?;
+            for slot in slots.due(now) {
+                if trace {
+                    eprintln!("S {} {} {:.4}", slot.time, slot.fresh as u8, slot.changed);
+                }
+                if let Some(texture) = &slot.frame {
+                    encoder.write_video(texture, slot.time, interval)?;
                     written += 1;
                 }
-                if changed > 0.0 && capture.dirty_regions {
+                if slot.changed > 0.0 && capture.dirty_regions {
                     let _ = writeln!(
                         events,
                         "{}",
-                        json!({ "t": seconds(next_video), "k": "f", "a": (changed * 10000.0).round() / 10000.0 })
+                        json!({ "t": seconds(slot.time), "k": "f", "a": (slot.changed * 10000.0).round() / 10000.0 })
                     );
                 }
-                next_video += interval;
             }
         }
 
@@ -505,8 +525,11 @@ fn record(config: Config) -> Result<()> {
             last_flush = Instant::now();
         }
         if last_stats.elapsed() > Duration::from_secs(1) {
-            let captured = capture.frames.lock().unwrap().captured;
-            emit(json!({ "event": "stats", "seconds": seconds(now), "frames": written, "captured": captured, "paused": paused }));
+            let (captured, dropped) = {
+                let f = capture.frames.lock().unwrap();
+                (f.captured, f.dropped)
+            };
+            emit(json!({ "event": "stats", "seconds": seconds(now), "frames": written, "captured": captured, "dropped": dropped, "paused": paused }));
             last_stats = Instant::now();
         }
         std::thread::sleep(Duration::from_millis(3));
@@ -514,14 +537,17 @@ fn record(config: Config) -> Result<()> {
 
     // Close out both tracks at the same moment.
     let end = qpc() - base - paused_total - paused_since.map(|s| qpc() - s).unwrap_or(0);
-    let last = capture.frames.lock().unwrap().latest.clone();
-    if let Some(texture) = last {
-        while next_video <= end {
-            encoder.write_video(&texture, next_video, interval)?;
+    let batch: Vec<_> = capture.frames.lock().unwrap().queue.drain(..).collect();
+    for (stamp, texture, changed) in batch {
+        slots.push(stamp - base - paused_total, texture, changed);
+    }
+    for slot in slots.flush(end) {
+        if let Some(texture) = &slot.frame {
+            encoder.write_video(texture, slot.time, interval)?;
             written += 1;
-            next_video += interval;
         }
     }
+    let next_video = slots.next_slot();
     if encoder.has_audio() && end > audio_next {
         let frames = ((next_video - audio_next) * 48000 / 10_000_000) as usize;
         audio_next += encoder.write_audio(&vec![0u8; frames * 4], audio_next)?;
@@ -537,11 +563,17 @@ fn record(config: Config) -> Result<()> {
     if let Some(message) = failure {
         return Err(windows::core::Error::new(E_FAIL, message));
     }
+    let (captured, dropped) = {
+        let f = capture.frames.lock().unwrap();
+        (f.captured, f.dropped)
+    };
     emit(json!({
         "event": "stopped",
         "reason": stop_reason,
         "seconds": seconds(next_video),
         "frames": written,
+        "captured": captured,
+        "dropped": dropped,
         "audioSeconds": seconds(audio_next),
     }));
     Ok(())

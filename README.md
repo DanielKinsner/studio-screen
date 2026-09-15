@@ -87,6 +87,7 @@ node tests/audio-clock.mjs          # helper's loopback capture keeps every samp
 # These record the screen and/or move the mouse; they wait for an idle PC:
 node tests/a2-recording-ui.mjs
 node tests/a4-native-capture.mjs
+node tests/a4-cadence.mjs             # helper: 30 fps content lands 2,2,2 recorded frames, never 1,3
 node tests/a5-open-speed.mjs
 node tests/desktop-capture.mjs      # browser-capture fallback; writes the files export-formats and audio-proof read
 # After `npm run desktop:pack` (throwaway profile, doesn't touch your library):
