@@ -5,8 +5,12 @@ import {
   parseSrt,
   sourceTime,
   visibleSegments,
+  zoomLead,
 } from "./timeline";
-import { newProject, type Point } from "./types";
+import { cameraFeel, defaults, newProject, type Point } from "./types";
+import { cameraAt } from "./camera";
+import { migrateProject } from "./storage";
+import { cleanSettings, styleKeys } from "./settings";
 describe("Non-destructive timeline", () => {
   it("merges overlapping cuts and respects trim boundaries", () => {
     const p = newProject();
@@ -128,6 +132,56 @@ describe("Automatic zooms", () => {
     ]);
     p.dismissedZooms = ["auto-3"];
     expect(autoZooms(p).map((z) => z.id)).toEqual(["auto-13"]);
+  });
+});
+describe("Zoom lead", () => {
+  it("adds half a second to every camera feel by default", () => {
+    expect(defaults.zoomLead).toBe(0.5);
+    const lead = (feel: keyof typeof cameraFeel) =>
+      zoomLead(cameraFeel[feel].response, defaults.zoomLead);
+    expect(lead("focused")).toBeCloseTo(0.842, 3);
+    expect(lead("smooth")).toBeCloseTo(1.04, 3);
+    expect(lead("gentle")).toBeCloseTo(1.355, 3);
+    expect(zoomLead(0.6)).toBeCloseTo(0.54, 3);
+  });
+  it("starts automatic zooms and their focus changes that much earlier", () => {
+    const p = newProject(false);
+    p.duration = 30;
+    p.trimEnd = 30;
+    p.points = [
+      { t: 5, x: 0.2, y: 0.2, click: true },
+      { t: 6.5, x: 0.8, y: 0.8, click: true },
+    ];
+    const [z] = autoZooms(p);
+    expect(z.start).toBeCloseTo(5 - 1.04, 6);
+    expect(z.focus!.map((f) => +(f.click! - f.t).toFixed(6))).toEqual([
+      1.04, 1.04,
+    ]);
+    p.settings = { ...p.settings, zoomLead: 0 };
+    expect(autoZooms(p)[0].start).toBeCloseTo(5 - 0.54, 6);
+  });
+  it("loads settings saved before the zoom lead as +0.5 s and still plays", () => {
+    const p = newProject(false);
+    p.duration = 10;
+    p.trimEnd = 10;
+    p.points = [
+      { t: 0, x: 0.5, y: 0.5 },
+      { t: 4, x: 0.3, y: 0.3, click: true },
+    ];
+    const { zoomLead: _, ...legacy } = p.settings;
+    void _;
+    const migrated = migrateProject({
+      ...p,
+      settings: legacy as typeof p.settings,
+    });
+    expect(migrated.settings.zoomLead).toBe(0.5);
+    expect(autoZooms(migrated)[0].start).toBeCloseTo(4 - 1.04, 6);
+    expect(cameraAt(migrated, 4.5).scale).toBeGreaterThan(1.5);
+  });
+  it("is part of a look, clamped when imported", () => {
+    expect(styleKeys).toContain("zoomLead");
+    expect(cleanSettings({ zoomLead: 9 })).toEqual({ zoomLead: 1.5 });
+    expect(cleanSettings({ zoomLead: -1 })).toEqual({ zoomLead: 0 });
   });
 });
 describe("Caption import", () => {

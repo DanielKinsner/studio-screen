@@ -55,7 +55,7 @@ function buildPath(p: Project): Path {
     reach.push(i && zooms[reach[i - 1]].end >= z.end ? reach[i - 1] : i);
   });
   const hasPointer = p.demo || p.points.length > 0;
-  const lead = zoomLead(s.cameraResponse);
+  const lead = zoomLead(s.cameraResponse, s.zoomLead ?? 0);
 
   const activeZoom = (t: number): Zoom | undefined => {
     const i = lastAtOrBefore(starts, t);
@@ -153,9 +153,11 @@ function buildPath(p: Project): Path {
     return Math.min(g.end, g.start + (u - segmentOutput) * g.rate);
   };
 
-  aim(sourceAt(0));
-  const springs: Spring[] = Array.from(target, (value) => ({
-    value,
+  // Every edit opens on the neutral pose (full frame, flat), even when a zoom
+  // starts right at the trim start: the video never opens mid-zoom.
+  const springs: Spring[] = Array.from({ length: CHANNELS }, (_, c) => ({
+    value:
+      c === PERSPECTIVE ? 45 : c === CENTER_X || c === CENTER_Y ? 0.5 : 0,
     velocity: 0,
   }));
   const dt = 1 / (RATE * SUBSTEPS);
@@ -195,6 +197,7 @@ function cameraPath(p: Project) {
     s.motionIntensity,
     s.cameraResponse,
     s.cameraBounce,
+    s.zoomLead,
     s.cursorSmoothing,
   );
   box.path ??= buildPath(p);

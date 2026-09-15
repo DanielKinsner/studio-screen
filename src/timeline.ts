@@ -1,4 +1,5 @@
 import type { Caption, Cut, Point, Project, SpeedSection, Zoom } from "./types";
+import { defaults } from "./types";
 import { memo } from "./spring";
 export const clamp = (n: number, min: number, max: number) =>
   Math.min(max, Math.max(min, n));
@@ -101,8 +102,12 @@ const demoClicks = [
   { t: 14, x: 0.4, y: 0.6 },
 ];
 
-/** Seconds before a click that the camera starts moving, so it arrives on time. */
-export const zoomLead = (response: number) => clamp(0.9 * response, 0.3, 1.2);
+/**
+ * Seconds before a click that the camera starts moving, so it arrives on time:
+ * the camera feel's own lead plus the "Zoom lead" setting.
+ */
+export const zoomLead = (response: number, extra = 0) =>
+  clamp(0.9 * response, 0.3, 1.2) + extra;
 
 /** Where the view centre can sit at this magnification without leaving the frame. */
 export const clampCenter = (v: number, scale: number) =>
@@ -121,8 +126,9 @@ const generateZooms = memo(
     scale: number,
     response: number,
     mode: "2d" | "3d",
+    extraLead: number,
   ): Zoom[] => {
-    const lead = zoomLead(response);
+    const lead = zoomLead(response, extraLead);
     const clicks: Click[] = (
       demo
         ? demoClicks
@@ -205,6 +211,7 @@ export function autoZooms(p: Project): Zoom[] {
     p.settings.zoomStrength,
     p.settings.cameraResponse,
     p.settings.motionMode,
+    p.settings.zoomLead ?? defaults.zoomLead,
   );
 }
 export function typingSections(p: Project) {

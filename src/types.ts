@@ -90,6 +90,8 @@ export type Settings = {
   cameraResponse: number;
   /** Camera spring overshoot: 0 glides in, higher values bounce. */
   cameraBounce: number;
+  /** Extra seconds automatic zooms start moving before a click, on top of the feel's own lead. */
+  zoomLead: number;
   motionBlur: number;
   followCursor: boolean;
   cursorStyle: "dark" | "light" | "dot";
@@ -167,6 +169,7 @@ export const defaults: Settings = {
   motionEase: "smooth",
   cameraResponse: 0.6,
   cameraBounce: 0,
+  zoomLead: 0.5,
   motionBlur: 0,
   followCursor: true,
   cursorStyle: "dark",

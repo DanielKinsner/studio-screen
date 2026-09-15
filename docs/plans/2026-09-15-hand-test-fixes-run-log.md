@@ -90,3 +90,19 @@ Commit: `4cab9ce`.
 - The lead window also applies to the first keyframe of an automatic zoom (zoom start → first click), so the zoom-in aims at the first click rather than wherever the pointer is on its way there. Same rule, same intent.
 - `zoomLead(response)` is used for hand keyframes now; slice 5 adds the extra lead through the same variable.
 
+Commit: `f3f3a42`.
+
+## Slice 5: Zoom lead slider (R5, D1)
+
+**Shipped:** `Settings.zoomLead` (default 0.5, limits 0–1.5, in `styleKeys`). `zoomLead(response, extra)` = `clamp(0.9 × response, 0.3, 1.2) + extra`, passed through `generateZooms` (memo arg; grouping and focus keyframes) and the camera's lead window; `cameraPath` cache key includes it. **Zoom lead** slider (0–1.5 s, step 0.05) under Move time / Bounce in Focus & 3D → Automatic focus & animation → Camera spring, with a live line "Automatic zooms start moving N s before each click." The camera springs now start from the neutral pose, so an edit never opens mid-zoom.
+
+**Verification:**
+- 5 new unit tests failed first (no `defaults.zoomLead`; zoom started at 4.46 instead of 3.96; the video opened at scale 2.5 when a zoom started at the trim start), then passed: leads Snappy 0.842 s, Smooth 1.04 s, Floaty 1.355 s; zoom and every focus keyframe start 1.04 s before its click; `zoomLead: 0` restores 0.54 s; a project saved without `zoomLead` migrates to 0.5 and still zooms (scale > 1.5 at 4.5 s); `cleanSettings` clamps 9 → 1.5 and −1 → 0; first sample is exactly `{scale 1, x 0.5, y 0.5}` and the flat pose (perspective 45) at trim start 0 and 2, reaching > 2.3× two seconds later.
+- `npm test` 79 passed; `npm run build` OK; `browser-smoke`, `a1-playback`, `editor-interactions` PASS.
+- Browser pane: slider shows 0.5 s by default; set to 1 s, then **Snappy** → still 1 s, line reads "1.34 s before each click".
+- `node tests/a3-export.mjs`: **correctness passed on both runs** (3600 frames, gap spread 1e-6 s, frame difference 2.19, AAC; edited 480 frames, pitch 439/440.7; cancel clean; desktop 3600 frames, files 2 → 1) but the **speed budget failed twice** (60 s export 30.05 s, then 72.52 s). During the second run the CPU sampled 99% with Premiere Pro accumulating ~640 CPU-seconds in 15 minutes while Dan worked. A3's project has auto-zoom off and its only zoom starts at 10 s, so nothing this slice changed runs differently during that export (the frame difference is bit-identical at 2.19). **Not a stop trigger:** the assertion doesn't need changing, and the machine is busy. A3 will be re-run for speed in slice 6 (which changes the 3D render) and again in slice 12.
+
+**Deviations / judgment calls:**
+- Settings fields in this codebase are non-optional and filled by `migrateProject` from `defaults` (like `cameraResponse`), so `zoomLead` follows that pattern rather than being `?:` optional; `autoZooms` and the camera also fall back defensively if an unmigrated object appears.
+- The neutral opening applies to every channel (scale, centre, tilt, offset, perspective, lift), not only scale.
+

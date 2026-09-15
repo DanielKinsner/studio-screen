@@ -6,7 +6,7 @@ const feels = [
   ["smooth", "Smooth"],
   ["gentle", "Floaty"],
 ] as const;
-import { autoZooms, clamp, timecode } from "./timeline";
+import { autoZooms, clamp, timecode, zoomLead } from "./timeline";
 import { tiltPresets } from "./motion";
 import { Slider, Toggle, IconButton } from "./Controls";
 export type PanelProps = {
@@ -344,6 +344,20 @@ export default function MotionPanel({
               setting({ cameraBounce: bounce / 100, motionEase: "custom" })
             }
           />
+          <Slider
+            label="Zoom lead"
+            value={s.zoomLead}
+            min={0}
+            max={1.5}
+            step={0.05}
+            unit=" s"
+            onChange={(zoomLead) => setting({ zoomLead })}
+          />
+          <p className="helper-text">
+            Automatic zooms start moving{" "}
+            {zoomLead(s.cameraResponse, s.zoomLead).toFixed(2)} s before each
+            click.
+          </p>
         </details>
       </details>
       <div className="section-title">

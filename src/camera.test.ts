@@ -139,6 +139,37 @@ describe("Spring camera", () => {
       0.7 * (target - from),
     );
   });
+  it("opens on the neutral pose even when a zoom starts at the trim start", () => {
+    for (const trimStart of [0, 2]) {
+      const p = project([
+        zoom({
+          start: trimStart,
+          end: trimStart + 4,
+          x: 0.2,
+          y: 0.8,
+          scale: 2.5,
+          mode: "3d",
+          follow: false,
+          tiltX: -15,
+          tiltY: 30,
+          tiltZ: 5,
+          offsetX: 10,
+        }),
+      ]);
+      p.trimStart = trimStart;
+      expect(cameraAt(p, trimStart)).toEqual({ scale: 1, x: 0.5, y: 0.5 });
+      expect(poseAt(p, trimStart)).toEqual({
+        x: 0,
+        y: 0,
+        z: 0,
+        offsetX: 0,
+        offsetY: 0,
+        perspective: 45,
+        scale: 1,
+      });
+      expect(cameraAt(p, trimStart + 2).scale).toBeGreaterThan(2.3);
+    }
+  });
   it("tilts a manual 3D zoom from flat to its chosen angle and back", () => {
     const p = project([
       zoom({
