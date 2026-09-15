@@ -52,3 +52,23 @@ Commit: `b5ff520`.
 - The region picker (record dialog) is not part of project undo at all (it sets local state), so nothing to apply there.
 - `edit()` now ignores edits that return the same project object (no empty undo steps).
 
+Commit: `7221120`.
+
+## Slice 3: No white frames while scrubbing (R4)
+
+**Shipped:** `src/previewFrames.ts`: `FrameHold` keeps a copy (longest side ≤ 1920 px) of the last settled video picture and hands it to the compositor as `media.frame` while the video is seeking or not ready; `Seeker` coalesces paused seeks (one in flight, the newest request runs when it lands). Wired into App's paused render, the seek effect, playback start and the playback cut-skip seek. New `tests/scrub-frames.mjs` (README → Tests). `compositor.ts` and `exporter.ts` are unchanged, so export renders exactly as before.
+
+**Root cause:** the compositor paints the off-white card and only draws video when `readyState >= 2`; every pointer move restarted the seek, so the video was almost never ready while scrubbing.
+
+**Verification:**
+- `node tests/scrub-frames.mjs` (20 s 1080p60 H.264 fixture, 5 s GOP, 40 moves) failed first: **empty card on 128 of 307** sampled animation frames. After the fix: **0 of 326**. The paused frame after release matched the decoded frame at the playhead (18.400 s): mean difference 1.92 vs 5.24 / 5.07 for ±0.25 s.
+- `npm test` 73 passed; `npm run build` OK; `browser-smoke`, `a1-playback`, `editor-interactions` PASS.
+- `node tests/a1-preview-perf.mjs` PASS (playback path changed): p95 17.0 ms, 1.05% dropped, 59.4 fps (previous run 16.8 ms, 0%). Premiere Pro was open and Dan was using the PC.
+- `node tests/a3-export.mjs`: first run **failed only the speed budget** (60 s export 30.27 s vs < 30 s; desktop 31.5 s); frames 3600, frame difference 2.19, pitch 439/440.7 all passed. Premiere Pro was running (8.6 GB) and the PC was in active use. Rerun with no code change: **PASS**, 22.95 s, 3600 frames, even spacing, difference 2.19, edited 480 frames, desktop 3600 frames in 29 s, cancel 2 → 1 files.
+
+**Deviations / judgment calls:**
+- The hold copy is made only for paused renders (once per landed seek, skipped if the time hasn't changed) and right before a seek we start ourselves during playback, not every playback frame, to keep the 60 fps preview budget.
+- Seek tolerance dropped from 0.04 s to 0.5 ms. The old threshold meant a one-frame arrow step (1/30 s) never seeked the video, so the drawn cursor moved but the picture didn't.
+- `requestVideoFrameCallback` was not needed: in Edge, drawing after `seeked` already matches the exact decoded frame (test above).
+- The fixture is `tests/scrub-source.mp4` (git-ignored by `tests/*.mp4`).
+

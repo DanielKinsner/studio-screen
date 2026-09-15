@@ -87,6 +87,7 @@ import {
 } from "./autoEdit";
 import { lastLook, rememberLook } from "./settings";
 import { EditHistory } from "./history";
+import { FrameHold, Seeker } from "./previewFrames";
 import { installGestures, inputGesture, pointerHeld } from "./gesture";
 import { parseEvents } from "./nativeEvents";
 import { capture, getDuration, loadVideo, releaseVideo } from "./media";
@@ -259,6 +260,10 @@ export default function App() {
   const [timelineScale, setTimelineScale] = useState(1);
   const canvas = useRef<HTMLCanvasElement>(null);
   const video = useRef<HTMLVideoElement | null>(null);
+  // The paused preview holds its last good picture while seeks land, and
+  // coalesces scrub seeks instead of restarting one per pointer move.
+  const hold = useRef(new FrameHold());
+  const seeker = useRef<Seeker | null>(null);
   const music = useRef<HTMLVideoElement | null>(null);
   const background = useRef<HTMLImageElement | null>(null);
   const captureRef = useRef<{
@@ -435,14 +440,18 @@ export default function App() {
           loaded = v;
           if (!alive) return releaseVideo(v);
           video.current = v;
-          v.currentTime = stateRef.current.trimStart;
+          seeker.current = new Seeker(v, () => setMediaVersion((n) => n + 1));
+          seeker.current.seek(tRef.current);
           setMediaVersion((n) => n + 1);
         })
         .catch((e) => notify(e.message));
     return () => {
       alive = false;
       releaseVideo(loaded);
-      if (video.current === loaded) video.current = null;
+      if (video.current === loaded) {
+        video.current = null;
+        seeker.current = null;
+      }
     };
   }, [project.video, project.videoUrl, notify]);
   useEffect(() => {
@@ -488,7 +497,7 @@ export default function App() {
     if (playingRef.current) return;
     try {
       renderFrame(canvas.current, project, time, {
-        video: video.current,
+        ...hold.current.media(video.current),
         background: background.current,
       });
     } catch (e) {
@@ -499,11 +508,7 @@ export default function App() {
     }
   }, [project, time, mediaVersion, s.aspect, previewSize, notify]);
   useEffect(() => {
-    const v = video.current;
-    if (!playing && v && Math.abs(v.currentTime - time) > 0.04) {
-      v.currentTime = time;
-      v.onseeked = () => setMediaVersion((n) => n + 1);
-    }
+    if (!playing) seeker.current?.seek(time);
   }, [time, playing, mediaVersion]);
   useLayoutEffect(() => {
     if (playing) return;
@@ -530,7 +535,7 @@ export default function App() {
       if (!canvas.current) return;
       try {
         renderFrame(canvas.current, p, t, {
-          video: video.current,
+          ...hold.current.media(video.current, false),
           background: background.current,
         });
       } catch (e) {
@@ -580,8 +585,10 @@ export default function App() {
         setPlaying(false);
         return;
       }
-      if (v && !v.seeking && Math.abs(v.currentTime - next) > 0.2)
+      if (v && !v.seeking && Math.abs(v.currentTime - next) > 0.2) {
+        hold.current.capture(v);
         v.currentTime = next;
+      }
       tRef.current = next;
       draw(p, next);
       if (timeTextRef.current) timeTextRef.current.textContent = timecode(out);
@@ -591,6 +598,8 @@ export default function App() {
     };
     const v = video.current;
     if (v) {
+      seeker.current?.cancel();
+      hold.current.capture(v);
       v.currentTime = tRef.current;
       v.playbackRate = speedAt(stateRef.current, tRef.current);
       v.volume = s.volume / 100;
