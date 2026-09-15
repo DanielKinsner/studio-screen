@@ -99,6 +99,18 @@ describe("Auto-edit on stop", () => {
       ),
     ).toHaveLength(1);
   });
+  it("counts typing zooms in the summary and removes them with Back to raw", () => {
+    const typing = Array.from({ length: 12 }, (_, i): Point => ({
+      ...move(4 + i * 0.25, 0.3, 0.6),
+      typing: true,
+    }));
+    const p = recording(12, [move(0), move(3.5, 0.3, 0.6), ...typing, move(11)]);
+    const { project, summary } = autoEdit(p, { stop: "other" });
+    const zooms = autoZooms(project);
+    expect(zooms.map((z) => z.id)).toEqual(["auto-type-4"]);
+    expect(summary.zooms).toBe(1);
+    expect(autoZooms(backToRaw(project))).toEqual([]);
+  });
   it("leaves very short recordings raw", () => {
     const p = recording(0.8, [{ ...move(0.2), click: true }]);
     const { project, summary } = autoEdit(p, { stop: "bar" });

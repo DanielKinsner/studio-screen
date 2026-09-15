@@ -114,6 +114,27 @@ export const clampCenter = (v: number, scale: number) =>
   clamp(v, 0.5 / scale, 1 - 0.5 / scale);
 
 type Click = { t: number; x: number; y: number };
+/** Something worth zooming to: a click, or a burst of typing starting at t. */
+type Moment = Click & { hold: number; typed: boolean };
+
+/** Keys closer together than this are one burst of typing. */
+const TYPING_GAP = 1.4;
+/** Typing goes where the last click was, if it was this recent. */
+const TYPING_CLICK = 10;
+
+/** Sustained typing: at least 3 keys over at least 0.5 s, gaps under 1.4 s. */
+export function typingBursts(points: Point[]) {
+  const groups: { start: number; end: number; count: number }[] = [];
+  for (const point of points) {
+    if (!point.typing) continue;
+    const last = groups.at(-1);
+    if (last && point.t - last.end < TYPING_GAP) {
+      last.end = point.t;
+      last.count++;
+    } else groups.push({ start: point.t, end: point.t, count: 1 });
+  }
+  return groups.filter((g) => g.count >= 3 && g.end - g.start >= 0.5);
+}
 
 const generateZooms = memo(
   (
@@ -128,41 +149,76 @@ const generateZooms = memo(
     mode: "2d" | "3d",
     extraLead: number,
     cuts: Cut[],
+    typing: boolean,
   ): Zoom[] => {
     const lead = zoomLead(response, extraLead);
-    const clicks: Click[] = (
-      demo
-        ? demoClicks
-        : points.filter(
-            // Clicks outside the recorded area or after the edit ends (such
-            // as on the recording bar) never become zooms.
-            (pt) =>
-              pt.click &&
-              pt.t <= trimEnd &&
-              pt.x >= 0 &&
-              pt.x <= 1 &&
-              pt.y >= 0 &&
-              pt.y <= 1,
+    const inCut = (t: number) =>
+      cuts.some((cut) => t >= cut.start && t < cut.end);
+    // Clicks outside the recorded area or after the edit ends (such as on the
+    // recording bar) never become zooms.
+    const clicks: Click[] = demo
+      ? demoClicks
+      : points.filter(
+          (pt) =>
+            pt.click &&
+            pt.t <= trimEnd &&
+            pt.x >= 0 &&
+            pt.x <= 1 &&
+            pt.y >= 0 &&
+            pt.y <= 1,
+        );
+    const moments: Moment[] = clicks.map((c) => ({
+      t: c.t,
+      x: c.x,
+      y: c.y,
+      hold: c.t + AUTO_HOLD,
+      typed: false,
+    }));
+    // A burst of typing acts like a click at its start that holds until the
+    // typing ends. It goes where you last clicked (usually the field you typed
+    // into), or where the pointer was.
+    if (typing && !demo)
+      for (const burst of typingBursts(
+        points.filter((pt) => pt.typing && pt.t <= trimEnd && !inCut(pt.t)),
+      )) {
+        let at: { x: number; y: number } | undefined;
+        for (let i = clicks.length - 1; i >= 0 && !at; i--)
+          if (
+            clicks[i].t <= burst.start &&
+            burst.start - clicks[i].t <= TYPING_CLICK
           )
-    )
+            at = clicks[i];
+        for (let i = points.length - 1; i >= 0 && !at; i--)
+          if (points[i].t <= burst.start) at = points[i];
+        at ??= points[0] ?? { x: 0.5, y: 0.5 };
+        moments.push({
+          t: burst.start,
+          x: clamp(at.x, 0, 1),
+          y: clamp(at.y, 0, 1),
+          hold: burst.end + AUTO_HOLD,
+          typed: true,
+        });
+      }
+    const kept = moments
       // Removed footage (a gap or a ripple) makes no zooms of its own.
-      .filter((c) => !cuts.some((cut) => c.t >= cut.start && c.t < cut.end))
-      // Clicks inside a hand-placed zoom belong to that zoom.
-      .filter(
-        (c) => !zooms.some((z) => c.t >= z.start - 1 && c.t <= z.end + 1),
-      );
-    const groups: Click[][] = [];
-    for (const c of clicks) {
+      .filter((m) => !inCut(m.t))
+      // Moments inside a hand-placed zoom belong to that zoom.
+      .filter((m) => !zooms.some((z) => m.t >= z.start - 1 && m.t <= z.end + 1))
+      .sort((a, b) => a.t - b.t);
+    const groups: Moment[][] = [];
+    let reach = -Infinity;
+    for (const m of kept) {
       const last = groups.at(-1);
-      if (
-        last &&
-        c.t - lead - (last[last.length - 1].t + AUTO_HOLD) < MERGE_GAP
-      )
-        last.push(c);
-      else groups.push([c]);
+      if (last && m.t - lead - reach < MERGE_GAP) {
+        last.push(m);
+        reach = Math.max(reach, m.hold);
+      } else {
+        groups.push([m]);
+        reach = m.hold;
+      }
     }
     const generated = groups.flatMap((group): Zoom[] => {
-      const id = `auto-${group[0].t}`;
+      const id = `${group[0].typed ? "auto-type-" : "auto-"}${group[0].t}`;
       if (dismissed.includes(id) || zooms.some((z) => z.id === id)) return [];
       const focus: (Click & { click: number })[] = [];
       for (const c of group) {
@@ -187,7 +243,7 @@ const generateZooms = memo(
         {
           id,
           start: Math.max(0, group[0].t - lead),
-          end: Math.min(duration, group[group.length - 1].t + AUTO_HOLD),
+          end: Math.min(duration, Math.max(...group.map((m) => m.hold))),
           x: focus[0].x,
           y: focus[0].y,
           scale,
@@ -216,20 +272,11 @@ export function autoZooms(p: Project): Zoom[] {
     p.settings.motionMode,
     p.settings.zoomLead ?? defaults.zoomLead,
     p.cuts,
+    p.settings.zoomWhileTyping ?? defaults.zoomWhileTyping,
   );
 }
 export function typingSections(p: Project) {
-  const events = p.points.filter((pt) => pt.typing);
-  const groups: { start: number; end: number; count: number }[] = [];
-  for (const point of events) {
-    const last = groups.at(-1);
-    if (last && point.t - last.end < 1.4) {
-      last.end = point.t;
-      last.count++;
-    } else groups.push({ start: point.t, end: point.t, count: 1 });
-  }
-  return groups
-    .filter((g) => g.count >= 3 && g.end - g.start >= 0.5)
+  return typingBursts(p.points)
     .map((g) => ({
       id: crypto.randomUUID(),
       start: Math.max(p.trimStart, g.start - 0.1),

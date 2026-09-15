@@ -220,3 +220,22 @@ Commit (9a): `82af9ae`.
 - Hidden-cursor ranges have no timeline track today; they ripple with the footage (9a) but there is nothing to draw.
 - At ≤ 480 px the Split and Add zoom buttons show icons only (with accessible names), because the extra tool buttons made the 390 px layout scroll sideways (caught by `browser-smoke`).
 
+Commit (9b–9d): `974aafb`.
+
+## Slice 10: Auto-zoom while typing (R1, D9)
+
+**Shipped:** `generateZooms` now builds "moments" from clicks **and** typing bursts. `typingBursts()` (shared with `typingSections`: gaps < 1.4 s, ≥ 3 keys, span ≥ 0.5 s) runs on typing points outside cuts and before `trimEnd`. Each burst is a moment at its start that holds until burst end + `AUTO_HOLD`, aimed at the last click in the recorded area within 10 s before it, else the pointer position at burst start. Moments go through the unchanged grouping (`MERGE_GAP` against the group's furthest hold), dead-zone, coalesce and lead logic. Groups that start with a burst get id `auto-type-<t>` (dashed, ×, dismissable); click-led groups keep `auto-<t>`, so existing dismissals still match. New setting `zoomWhileTyping` (default true, not a style key) with a **Zoom while typing** toggle under Automatic zoom. No native changes.
+
+**Verification:**
+- 6 new tests in `src/timeline.test.ts` failed first, then pass: click at 3 s + typing 4–7 s → **one** zoom `auto-3`, end 7 + 2.2 s, a single focus point, camera scale > 1.5 the whole way (no zoom out and back); typing 14–16 s with the last click 13 s earlier → separate `auto-type-14` at the pointer (0.7, 0.2), magnification = zoom strength; typing 7 s after a click → too far to merge (same rule as two clicks), so `auto-type-9` aims at the clicked field (0.25, 0.75) though the pointer moved away; sparse keys → none; burst in a gap → none; in a ripple cut → none; after trim end → none; toggle off → none; dismissed → none; autoZoom off (Back to raw) → none; `zoomWhileTyping` defaults on for old settings and isn't in `styleKeys`.
+- New auto-edit test: a take with only typing → summary counts **1 zoom** (`auto-type-4`), Back to raw removes it.
+- `npm test` 15 files, **107 passed**; `npm run build` OK. Browser pane: the Focus & 3D panel shows "Automatic zoom", "Zoom while typing" (on, "Zoom in where you type, holding until you stop"), "Follow cursor while zoomed".
+- `browser-smoke`, `a1-playback`, `editor-interactions`, `cutting` PASS.
+- `node tests/a3-export.mjs`: the first run exited with an error **before writing results**; the message was cut off by my output filter and I couldn't recover it. Two reruns with no code change passed: **25.1 s** (desktop 26.8 s), then **20.52 s**, exit 0 (desktop 21.1 s; 3600 frames, difference 2.21, 480 frames, pitch 439/440.7, gap+ripple 270 frames, cancel 2 → 1).
+- **`node tests/a5-open-speed.mjs` not run: PC in use** (idle 0.14–0.33 s). A5 injects no real input (it uses the scripted fake helper), but the real app window hides and reappears, so it follows the idle rule. Retried in slice 12.
+
+**Deviations / judgment calls:**
+- Burst-led zoom ids use the `auto-type-` prefix. They stay distinct from click zooms at the same time, and still start with `auto-` for dismissal, the dashed style and the auto-edit count.
+- When no click is within 10 s and no pointer sample precedes the burst, the first recorded point (or the centre) is used; coordinates are clamped to the frame.
+- A click that sits inside removed footage can still be the aim for a later burst (its position is still where the field is); only the timing of moments inside cuts is dropped.
+

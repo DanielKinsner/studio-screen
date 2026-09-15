@@ -272,6 +272,12 @@ export default function MotionPanel({
           onChange={(autoZoom) => setting({ autoZoom })}
           description="Create focus moments from captured clicks"
         />
+        <Toggle
+          label="Zoom while typing"
+          checked={s.zoomWhileTyping}
+          onChange={(zoomWhileTyping) => setting({ zoomWhileTyping })}
+          description="Zoom in where you type, holding until you stop"
+        />
         <Slider
           label="Zoom strength"
           value={s.zoomStrength}

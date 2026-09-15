@@ -79,6 +79,8 @@ export type Settings = {
   cursorHighlight: boolean;
   showCursor: boolean;
   autoZoom: boolean;
+  /** Automatic zoom also zooms in on bursts of typing. */
+  zoomWhileTyping: boolean;
   zoomStrength: number;
   speed: number;
   volume: number;
@@ -162,6 +164,7 @@ export const defaults: Settings = {
   cursorHighlight: true,
   showCursor: true,
   autoZoom: true,
+  zoomWhileTyping: true,
   zoomStrength: 1.65,
   speed: 1,
   volume: 100,

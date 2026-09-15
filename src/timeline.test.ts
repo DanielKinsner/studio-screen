@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  AUTO_HOLD,
   autoZooms,
   outputDuration,
   parseSrt,
@@ -132,6 +133,106 @@ describe("Automatic zooms", () => {
     ]);
     p.dismissedZooms = ["auto-3"];
     expect(autoZooms(p).map((z) => z.id)).toEqual(["auto-13"]);
+  });
+});
+describe("Zoom while typing", () => {
+  // A key every 0.25 s from `from` to exactly `to`.
+  const keys = (from: number, to: number, x = 0.5, y = 0.5): Point[] =>
+    Array.from({ length: Math.round((to - from) / 0.25) + 1 }, (_, i) => ({
+      t: from + i * 0.25,
+      x,
+      y,
+      typing: true,
+    }));
+  const take = (points: Point[]) => {
+    const p = newProject(false);
+    p.duration = 30;
+    p.trimEnd = 30;
+    p.points = [...points].sort((a, b) => a.t - b.t);
+    return p;
+  };
+  it("keeps a click and the typing after it in one zoom that lasts through the burst", () => {
+    const p = take([
+      { t: 0, x: 0.5, y: 0.5 },
+      { t: 3, x: 0.3, y: 0.4, click: true },
+      ...keys(4, 7, 0.3, 0.4),
+    ]);
+    const zooms = autoZooms(p);
+    expect(zooms).toHaveLength(1);
+    const [z] = zooms;
+    expect(z.id).toBe("auto-3");
+    expect(z.start).toBeCloseTo(3 - zoomLead(0.6, 0.5), 6);
+    expect(z.end).toBeCloseTo(7 + AUTO_HOLD, 6);
+    expect(z.focus!.map((f) => [f.x, f.y])).toEqual([[0.3, 0.4]]);
+    // It never zooms out and back in between the click and the end of typing.
+    for (let t = 3; t <= 7 + AUTO_HOLD - 0.3; t += 0.1)
+      expect(cameraAt(p, t).scale).toBeGreaterThan(1.5);
+  });
+  it("zooms to the pointer when typing starts with no recent click", () => {
+    const p = take([
+      { t: 0, x: 0.2, y: 0.2 },
+      { t: 1, x: 0.4, y: 0.3, click: true },
+      { t: 12, x: 0.7, y: 0.2 },
+      ...keys(14, 16, 0.7, 0.2),
+    ]);
+    const zooms = autoZooms(p);
+    const typed = zooms.find((z) => z.id === "auto-type-14")!;
+    expect(typed).toBeDefined();
+    expect([typed.x, typed.y]).toEqual([0.7, 0.2]);
+    expect(typed.scale).toBe(p.settings.zoomStrength);
+    expect(typed.end).toBeCloseTo(16 + AUTO_HOLD, 6);
+    // The click 13 s earlier is its own, separate zoom.
+    expect(zooms.map((z) => z.id)).toEqual(["auto-1", "auto-type-14"]);
+  });
+  it("aims at the field clicked up to 10 s before typing, even if the pointer moved away", () => {
+    const p = take([
+      { t: 0, x: 0.9, y: 0.9 },
+      { t: 2, x: 0.25, y: 0.75, click: true },
+      { t: 6, x: 0.9, y: 0.1 },
+      ...keys(9, 11, 0.9, 0.1),
+    ]);
+    // Too far apart to merge (same rule as two clicks), so two zooms, both
+    // on the clicked field.
+    const zooms = autoZooms(p);
+    expect(zooms.map((z) => z.id)).toEqual(["auto-2", "auto-type-9"]);
+    expect([zooms[1].x, zooms[1].y]).toEqual([0.25, 0.75]);
+    expect(zooms[1].end).toBeCloseTo(11 + AUTO_HOLD, 6);
+  });
+  it("ignores short or sparse typing, typing in a cut, after the trim and when turned off", () => {
+    const sparse = take([
+      { t: 2, x: 0.5, y: 0.5, typing: true },
+      { t: 2.2, x: 0.5, y: 0.5, typing: true },
+      { t: 8, x: 0.5, y: 0.5, typing: true },
+    ]);
+    expect(autoZooms(sparse)).toEqual([]);
+    const burst = take(keys(5, 7, 0.6, 0.6));
+    expect(autoZooms(burst)).toHaveLength(1);
+    expect(autoZooms({ ...burst, cuts: [{ id: "g", start: 4, end: 8 }] })).toEqual([]);
+    expect(
+      autoZooms({ ...burst, cuts: [{ id: "r", start: 4, end: 8, ripple: true }] }),
+    ).toEqual([]);
+    expect(autoZooms({ ...burst, trimEnd: 4.5 })).toEqual([]);
+    expect(
+      autoZooms({ ...burst, settings: { ...burst.settings, zoomWhileTyping: false } }),
+    ).toEqual([]);
+  });
+  it("can be dismissed like any automatic zoom, and Back to raw removes it", () => {
+    const p = take(keys(5, 7, 0.6, 0.6));
+    const [z] = autoZooms(p);
+    expect(z.id).toBe("auto-type-5");
+    expect(autoZooms({ ...p, dismissedZooms: [z.id] })).toEqual([]);
+    expect(autoZooms({ ...p, settings: { ...p.settings, autoZoom: false } })).toEqual([]);
+  });
+  it("defaults on for older settings and is not part of a look", () => {
+    expect(defaults.zoomWhileTyping).toBe(true);
+    expect(styleKeys).not.toContain("zoomWhileTyping");
+    const p = take(keys(5, 7));
+    const { zoomWhileTyping: _, ...legacy } = p.settings;
+    void _;
+    expect(
+      migrateProject({ ...p, settings: legacy as typeof p.settings }).settings
+        .zoomWhileTyping,
+    ).toBe(true);
   });
 });
 describe("Zoom lead", () => {
