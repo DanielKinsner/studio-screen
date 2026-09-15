@@ -6,7 +6,7 @@ Updated 2026-09-15 after the 0.4.0 hand-test fix run on Daniel Kinsner's office 
 
 **Version 0.4.0.** 115 JavaScript unit tests in 16 files pass, plus the production build, browser smoke, A1 playback, the new browser tests (`editor-interactions`, `scrub-frames`, `3d-fit`, `timeline-resize`, `cutting`, `focus-dot`), the new desktop tests (`export-location`, `alt-tilt`), A2, A5 and the packaged smoke test on the 0.4.0 portable. A3's correctness passes on every run; its 30 s speed budget is load-sensitive on a busy PC.
 
-**Next is Dan's hand test of 0.4.0 (steps in STATUS.md).** The portable EXE exists only on the office PC; on another machine rebuild it with `npm run desktop:pack`. Open items: the capture helper's own sync test measured sound ~57 ms late on 2026-09-15 (−5 ms the day before, no helper changes; do not add an offset), and `tests/desktop-capture.mjs` is stale. The separate 30-minute/4K soak and timed 4K60 export remain unverified. Do not treat this machine's measurements as destination-hardware proof.
+**Next is Dan's hand test of 0.4.0 (steps in STATUS.md).** The portable EXE exists only on the office PC; on another machine rebuild it with `npm run desktop:pack`. Open items: the capture helper's own sync test measured sound ~57 ms late on 2026-09-15 (−5 ms the day before, no helper changes; do not add an offset), and exporting a browser-captured WebM shows only its first second (found by the repaired `tests/desktop-capture.mjs`; cause in STATUS.md heads-up 4). The separate 30-minute/4K soak and timed 4K60 export remain unverified. Do not treat this machine's measurements as destination-hardware proof.
 
 ## Get the complete source
 

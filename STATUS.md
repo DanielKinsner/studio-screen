@@ -1,6 +1,6 @@
 # Status — Studio Screen
 
-**Last updated:** 2026-09-15 (0.4.0 built with every hand-test fix; ready for Dan's hand test)
+**Last updated:** 2026-09-15 (0.4.0 built with every hand-test fix; ready for Dan's hand test; `desktop-capture` repaired)
 
 ## Where things stand
 
@@ -41,7 +41,8 @@ What changed since 0.3.0, in Dan's words from the first hand test:
 
 1. **Sound measured ~57 ms late today.** The helper's own sync test (`tests/a4-av-sync.mjs`) measured 75, 51, 53, 58, 47 ms, and A4's single-flash check measured 66 then 58 ms (limit 20). Yesterday the same test measured −5 ms. **Nothing in this run touched capture:** that test runs the unchanged helper directly with its own fixture. Premiere Pro, Discord, Chrome and Spotify were open at the time. No offset was added (as the plan requires). Check it in the hand test below (step 13); a follow-up task is queued to investigate.
 2. **A3 export speed is load-sensitive.** Every A3 run passed on correctness (exact frames, audio, pitch, cancel). The 60 s export beat its 30 s budget in five runs (20.5–25.9 s) and missed it in others (30–40 s) while Codex and Premiere were loading the PC. A side-by-side of old and new code showed the same spread (23–49 s), so it isn't a slowdown from this work.
-3. **`tests/desktop-capture.mjs` has been stale since 9/14** (before this run): it expects the pre-auto-edit toast and browser downloads. Only its folder settings were changed so it can't touch real data; a follow-up task is queued to repair it.
+3. **`tests/desktop-capture.mjs` is repaired and passes again** (9/15 13:51, both the window and `--region` variants; `audio-proof` and `export-formats` pass on the files it writes). It now expects the auto-edit toast and an export streamed to `tests/.exports`, and it no longer types or clicks on the PC: the browser-capture fallback records no clicks or keys by design (the helper does that), and none at all for a window.
+4. **Bug found by that run, not fixed: exporting a browser-captured WebM shows only its first ~1 s.** Every later frame is the empty card; sound is fine. Native MP4 recordings (the normal path) are unaffected. Cause: MediaRecorder WebMs have no index and keyframes only every ~5 s, and mediabunny 1.56.2's lookup jumps straight to the one-second cluster it remembers, finds no keyframe there, and gives up instead of looking earlier. The same file remuxed with an index returns every frame. It slipped through because `export-formats` exports only 1 s of that file and `desktop-capture` checks the export's size, not its pictures.
 
 ## Dan's hand test for 0.4.0
 
@@ -92,9 +93,10 @@ Tell me: which zoom lead feels right, whether typing zooms are welcome, how the 
 ## Next steps (in order)
 
 1. Dan's hand test above.
-2. Follow-up tasks queued from this run: investigate the ~57 ms A/V measurement (no offsets), and repair the stale `tests/desktop-capture.mjs`.
-3. Tune defaults from Dan's answers (zoom lead, typing zoom).
-4. Still unverified from before: the separate 30-minute/4K soak and timed 4K60 export.
+2. Follow-up queued from this run: investigate the ~57 ms A/V measurement (no offsets).
+3. Fix exporting browser-captured WebMs (heads-up 4), with a test that exports the whole file and checks its pictures.
+4. Tune defaults from Dan's answers (zoom lead, typing zoom).
+5. Still unverified from before: the separate 30-minute/4K soak and timed 4K60 export.
 
 ## Setup on any machine
 
@@ -117,7 +119,8 @@ Every line should show ✔. `npm run desktop:dev` runs the app from source; `npm
   - Custom app cursors draw as an arrow.
   - Drag gestures aren't interpreted.
   - The timeline fits its whole length to the width, so closing a gap rescales the view instead of leaving room at the end.
-- `tests/export-formats.mjs` needs `tests/native-capture.webm`, which `tests/desktop-capture.mjs` creates (currently stale, see heads-up 3).
+  - Browser-capture fallback (no helper): no clicks, keys or typing, so no automatic zooms; for a window it records no pointer at all (window sources have no display to poll).
+- `tests/export-formats.mjs` and `tests/audio-proof.mjs` need `tests/native-capture.webm` / `tests/native-export.webm`, which `tests/desktop-capture.mjs` creates.
 
 ## Not in git (on purpose)
 

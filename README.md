@@ -84,7 +84,7 @@ node tests/a3-export.mjs
 node tests/a2-recording-ui.mjs
 node tests/a4-native-capture.mjs
 node tests/a5-open-speed.mjs
-node tests/desktop-capture.mjs      # browser-capture fallback (stale since 9/14, see STATUS.md)
+node tests/desktop-capture.mjs      # browser-capture fallback; writes the files export-formats and audio-proof read
 # After `npm run desktop:pack` (throwaway profile, doesn't touch your library):
 node tests/packaged-smoke.mjs --portable
 ```
