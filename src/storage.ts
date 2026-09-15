@@ -21,6 +21,9 @@ export function migrateProject(p: Project): Project {
     },
     capture: legacy ? "legacy" : p.capture,
     speeds: p.speeds || [],
+    splits: Array.isArray(p.splits)
+      ? [...new Set(p.splits.filter(Number.isFinite))].sort((a, b) => a - b)
+      : [],
     hiddenCursor: p.hiddenCursor || [],
     dismissedZooms: p.dismissedZooms || [],
   };
@@ -147,6 +150,15 @@ export async function readProject(file: File): Promise<Project> {
   for (const speed of p.speeds || [])
     if (!Number.isFinite(speed.rate) || speed.rate < 0.5 || speed.rate > 4)
       throw new Error("Invalid speed section.");
+  for (const cut of p.cuts)
+    if (cut.ripple !== undefined && typeof cut.ripple !== "boolean")
+      throw new Error("Invalid cut.");
+  if (
+    p.splits !== undefined &&
+    (!Array.isArray(p.splits) ||
+      p.splits.some((t: unknown) => !Number.isFinite(t)))
+  )
+    throw new Error("Invalid split points.");
   for (const z of p.zooms) {
     for (const key of ["x", "y", "scale"])
       if (!Number.isFinite(z[key])) throw new Error("Invalid focus point.");

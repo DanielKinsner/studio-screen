@@ -127,6 +127,7 @@ const generateZooms = memo(
     response: number,
     mode: "2d" | "3d",
     extraLead: number,
+    cuts: Cut[],
   ): Zoom[] => {
     const lead = zoomLead(response, extraLead);
     const clicks: Click[] = (
@@ -144,6 +145,8 @@ const generateZooms = memo(
               pt.y <= 1,
           )
     )
+      // Removed footage (a gap or a ripple) makes no zooms of its own.
+      .filter((c) => !cuts.some((cut) => c.t >= cut.start && c.t < cut.end))
       // Clicks inside a hand-placed zoom belong to that zoom.
       .filter(
         (c) => !zooms.some((z) => c.t >= z.start - 1 && c.t <= z.end + 1),
@@ -212,6 +215,7 @@ export function autoZooms(p: Project): Zoom[] {
     p.settings.cameraResponse,
     p.settings.motionMode,
     p.settings.zoomLead ?? defaults.zoomLead,
+    p.cuts,
   );
 }
 export function typingSections(p: Project) {

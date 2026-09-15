@@ -55,8 +55,15 @@ export type Annotation = {
   color?: string;
   intensity?: number;
 };
-export type Cut = { id: string; start: number; end: number };
-export type SpeedSection = Cut & {
+/** A span of source time on the timeline. */
+export type Range = { id: string; start: number; end: number };
+/**
+ * Removed footage. A gap keeps its width on the timeline; a ripple cut draws
+ * at zero width so everything after it slides left. Playback and export skip
+ * both the same way.
+ */
+export type Cut = Range & { ripple?: boolean };
+export type SpeedSection = Range & {
   rate: number;
   /** Added by the automatic edit; removable on its own or via Back to raw. */
   auto?: boolean;
@@ -121,8 +128,10 @@ export type Project = {
   captions: Caption[];
   annotations: Annotation[];
   cuts: Cut[];
+  /** Split points (source seconds) dividing the footage into pieces. */
+  splits?: number[];
   speeds: SpeedSection[];
-  hiddenCursor: Cut[];
+  hiddenCursor: Range[];
   dismissedZooms: string[];
   trimStart: number;
   trimEnd: number;

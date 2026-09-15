@@ -172,3 +172,21 @@ Commit: `43bc10c`.
 - Resizing is a layout preference, not a project edit, so it is not part of undo.
 - At 1366×768 the 70% cap leaves a 56 px preview. Allowed by the plan ("even at the expense of the preview").
 
+Commit: `188e1bd`.
+
+## Slice 9: Premiere-style cutting (R9, D2–D6)
+
+**Stop-trigger check (section 6.2):** the collapsed-view model (D6) works. Every consumer of `cuts` either skips them for output (`visibleSegments` → playback, export, audio, captions, click sounds, camera) or only draws them, so ripple is purely a drawing rule. No stored item needs re-timing.
+
+### 9a: Model and pure functions
+
+**Shipped:** `Cut.ripple?: boolean` (new `Range` type for plain spans; `hiddenCursor` uses it), `Project.splits?: number[]`. New `src/edits.ts`: `pieces`, `editPoints`, `splitAt` (no-op within 1/60 s of an edit point), `deletePiece({ ripple })`, `closeGap`, `restore`, `rippleItems` (same-step side effects), `timelineTime`, `sourceFromTimeline`, `timelineDuration`, and `dragEdge` for 9c's edge drags (trim ends, cut edges, split edges; Shift = ripple). `generateZooms` ignores clicks inside any cut (memo arg `cuts`). `migrateProject` normalises `splits` (sorted, unique, finite; `[]` when missing); `.studio` import validates `ripple` (boolean) and `splits` (finite numbers).
+
+**Verification:** `src/edits.test.ts` 15 tests PASS: pieces/splits (including splits outside the trim ignored, and within-a-frame no-ops); gap delete (output 20 → 15 s, timeline width unchanged, zooms untouched); ripple delete (a zoom fully inside removed, one crossing an edge clipped 3–7 → 3–5, one spanning kept with its inside focus keyframe dropped; a speed section after it keeps source 12–16 and draws at 7–11; caption/annotation/hidden-cursor side effects); close gap → ripple, restore → footage back while ripple-deleted items stay gone; 0.25 s output guard; gap vs ripple produce identical `outputDuration` and `sourceTime`; mapping both ways around overlapping ripple cuts (collapse point opens onto the following footage); edge drags (split → gap or ripple, grow/reclaim a gap, Shift beside a plain gap adds a separate ripple cut, trim ends); automatic zooms vanish for clicks in a gap or ripple and return on restore; an old project without `splits`/`ripple` migrates, plays and zooms. `npm test` 15 files, **99 passed**.
+
+**Deviations / judgment calls:**
+- Splits outside the trim range are **ignored, not deleted**, so trimming in and back out keeps them (the plan's invariant "strictly inside the trim range" holds for everything that reads them).
+- Deleting a piece keeps the split points at its edges, so Restore brings back exactly that piece.
+- Shift-dragging next to a plain gap adds a separate ripple cut for the newly removed part instead of converting the whole gap into a ripple.
+- Edge drags that would leave < 0.25 s of output return the project unchanged (the drag simply stops having an effect).
+
