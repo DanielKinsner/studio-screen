@@ -4,6 +4,8 @@
 //     frame matches the shared compositor.
 //  2. Browser: cuts + a 2x speed section give the exact edited frame count and
 //     keep the 440 Hz test tone at 440 Hz (pitch preserved).
+//  2b. Browser: a gap plus a ripple cut export exactly as many frames as the
+//     output duration (ripple only changes how the timeline is drawn).
 //  3. Browser: cancelling rejects with AbortError and produces no file.
 //  4. Desktop: exporting with the window minimized still finishes, the file is
 //     streamed to disk, and a cancelled export leaves no file behind.
@@ -235,6 +237,28 @@ try {
     audioSeconds: +(samples.length / 48000).toFixed(3),
   };
 
+  // 2b. A gap and a ripple cut: exactly as many frames as the output lasts.
+  const rippled = page.waitForEvent("download", { timeout: 120000 });
+  const rippleOutput = await page.evaluate(
+    new Function(
+      `return (async () => {${setup}
+      const { outputDuration } = await import("/src/timeline.ts");
+      const p = make(12);
+      p.splits = [2, 3, 6, 8];
+      p.cuts = [
+        { id: "gap", start: 2, end: 3 },
+        { id: "ripple", start: 6, end: 8, ripple: true },
+      ];
+      const blob = await exportProject(p, { format: "mp4", height: 720, fps: 30, signal: new AbortController().signal, progress: () => {} });
+      save(blob, "a3-ripple.mp4");
+      return outputDuration(p);
+    })()`,
+    ),
+  );
+  const rippleFile = path.join(root, "tests/a3-ripple.mp4");
+  await (await rippled).saveAs(rippleFile);
+  results.rippleGap = { output: rippleOutput, ...(await probe(rippleFile)) };
+
   // 3. Cancel.
   let downloads = 0;
   page.on("download", () => downloads++);
@@ -361,6 +385,8 @@ expect(d.frames).toBe(480);
 expect(Math.abs(d.audioSeconds - 8)).toBeLessThan(0.05);
 expect(Math.abs(d.normalPitch - 440)).toBeLessThan(5);
 expect(Math.abs(d.fastPitch - 440)).toBeLessThan(8);
+expect(results.rippleGap.output).toBe(9);
+expect(results.rippleGap.frames).toBe(Math.round(results.rippleGap.output * 30));
 expect(c.error).toBe("AbortError");
 expect(c.downloads).toBe(0);
 expect(k.minimized).toBe(true);

@@ -7,6 +7,7 @@ import {
   editPoints,
   pieces,
   restore,
+  snapValue,
   sourceFromTimeline,
   splitAt,
   timelineDuration,
@@ -238,6 +239,16 @@ describe("Edge drags", () => {
     expect(dragEdge(p, { kind: "trim-start" }, 2, false).trimStart).toBe(2);
     expect(dragEdge(p, { kind: "trim-end" }, 25, false).trimEnd).toBe(20);
     expect(dragEdge(p, { kind: "trim-end" }, 0.1, false)).toBe(p);
+  });
+});
+
+describe("Snapping", () => {
+  it("lands exactly on the nearest target within reach, and nowhere else", () => {
+    expect(snapValue(4.93, [2, 5, 9], 0.1)).toBe(5);
+    expect(snapValue(4.85, [2, 5, 9], 0.1)).toBe(4.85);
+    expect(snapValue(5.04, [5, 5.1], 0.1)).toBe(5);
+    expect(snapValue(5.07, [5, 5.1], 0.1)).toBe(5.1);
+    expect(snapValue(3, [], 1)).toBe(3);
   });
 });
 

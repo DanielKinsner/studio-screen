@@ -190,3 +190,33 @@ Commit: `188e1bd`.
 - Shift-dragging next to a plain gap adds a separate ripple cut for the newly removed part instead of converting the whole gap into a ripple.
 - Edge drags that would leave < 0.25 s of output return the project unchanged (the drag simply stops having an effect).
 
+Commit (9a): `82af9ae`.
+
+### 9b–9d: Collapsed timeline drawing, tools, menus, snapping
+
+**Shipped:**
+- **One mapping for the whole timeline** (`Axis` in `TimelineClip.tsx`: `tl`, `src`, `total`, built from `timelineTime`/`sourceFromTimeline`). Ruler labels (timeline time), playhead (paused and during playback), scrubbing, the screen track, gaps, ripple markers, zoom/caption/annotation/speed clips and filmstrip thumbnail times all go through it. Grep: no `/ project.duration` or `/ p.duration` math remains in timeline JSX.
+- New `src/ScreenTrack.tsx`: each piece is its own block (dark divider at splits, peach outline when selected), gaps are the hatched blocks with draggable edges, ripple cuts show a small marker at the collapse point (tooltip "Removed 9.0 s: right-click to restore"), trim grips on the outer edges now actually drag, and the razor shows a scissors cursor with a hover line.
+- New `src/TimelineMenu.tsx`: right-click menus (arrow keys, Enter, Esc/Tab/click-away close). Piece: Split at playhead · Delete (leave gap) · Ripple delete. Gap: Close gap · Restore footage. Ripple marker: Restore footage.
+- Toolbar: Select (V) / Razor (C) toggle group, **Split** (Ctrl+K) replacing **Remove 1s**, Add zoom, Delete, and a **Magnet** snapping toggle (S; `localStorage["studio-snap"]`, default on). Keys: Ctrl+K split at playhead; Delete/Backspace: piece → gap, gap → close (ripple), other clips → remove as before; Shift+Delete ripple-deletes a piece; Esc also returns to Select. Help dialog lists the new shortcuts.
+- Edge drags (pieces, gaps, trim grips) run through `dragEdge` with a live draft and one undo step on release; Shift = ripple.
+- Snapping within 8 CSS px for clip moves/resizes, edge drags, razor and playhead scrub, to the playhead (not for scrubbing itself), all edit points and other clips' edges; thin peach snap line while snapped.
+- `TimelineClip` rewritten onto the axis with snapping; `Filmstrip` takes explicit sample times; `IconButton` gains `pressed` (aria-pressed). Pacing panel's removed-ranges list now says "Gap" or "Closed gap".
+- `tests/a3-export.mjs` gains case 2b (gap + ripple export); new `tests/cutting.mjs` (README → Tests).
+
+**Verification:**
+- `node tests/cutting.mjs` PASS on the sample project: Ctrl+K at 8 s and 17 s → 3 pieces; Delete middle piece → 1 hatched gap, duration 00:24 → **00:15**, hand zoom box unchanged (x 591, w 110); select gap + Delete → 0 gaps, 1 marker, "Make room for what matters." moved from x 883 to 752 (9 s into the now 15 s timeline, ±2 px); right-click marker → Restore → 3 pieces, caption back at 883; Shift+Delete first piece → 2 pieces, 00:16, then undo; C + click at 2.5 s → 4 pieces (razor line shown on hover); auto zoom dragged from 3.96 s to 5 px short of the 8 s split → snap line shown → **start exactly 8**; eight Ctrl+Z presses walk back through drag, razor, restore, close gap, gap, add zoom and both splits one step each; piece edge dragged 2 s inward → gap (00:22); Shift-drag → ripple (00:22); trim grip dragged 0.9 s → snapped onto the caption at **1 s**; `.studio` round-trip keeps `splits` and `ripple`; 0 page errors.
+- Screenshot check: selected piece outline, hatched gap over the filmstrip, ruler in timeline time, menu styled like the app with "Split at playhead" disabled off-clip.
+- `npm test` 15 files, **100 passed** (+`snapValue`); `npm run build` OK; `browser-smoke`, `a1-playback`, `editor-interactions`, `scrub-frames`, `timeline-resize`, `3d-fit`, `v2-visual` PASS; `v2-proof` PASS (export difference 2.14, effect difference 15.33, clip drag + undo).
+- `node tests/a3-export.mjs`: new **case 2b PASS** (output 9 s, **270 frames** at 30 fps, even spacing, 9.000 s). All other correctness passed (3600 frames, difference 2.21, 480 frames, pitch 439/440.7, cancel clean, desktop 3600 frames in 27.9 s, files 2 → 1); the browser 60 s export took **35.13 s**, over its 30 s budget again.
+- **Speed A/B to rule out a regression:** a temporary worktree at `ceb6811` (slice 6, where A3 passed in 24.16 s) was served on port 5199 and the identical 60 s 1080p60 3D export was timed alternately against old and new code in headless Edge. Old: 29.13, 41.21, 32.96, 26.39, 35.69 s. New: 47.52, 34.74, 25.98, 22.97, 49.12 s. The ranges overlap completely and the new code posted the two fastest runs, so the swings are machine load (Codex's `native-lifecycle-probe-v2` and node processes were running), not this work. Both idle apps held 60 fps with zero long tasks. The worktree, its junction links (removed as links only; `node_modules` and the 145 MB fixture verified intact), the second server config and the temp scripts were removed.
+- Mishap during the A/B, fixed: the old-code server first shared the main `node_modules/.vite` cache through the junction and invalidated one pre-bundled dependency (504 "Outdated Optimize Dep"). I stopped it, restarted the main dev server (clean re-optimise; playback test PASS, deps served 200), and gave the old server its own `cacheDir` before retrying.
+
+**Deviations / judgment calls:**
+- **Fit-to-width timeline:** the timeline already stretches its full length across the width, so closing a gap rescales everything to the shorter length rather than leaving empty space at the end like Premiere. Clips still slide left; the test checks the exact new position.
+- Pressing a **piece** selects it *and* scrubs from there (pieces cover the whole screen row, which was a scrub surface before). Gaps select without scrubbing; ripple markers are right-click only (Delete does nothing to them).
+- Because ripple cuts have zero width, dragging the edge beside a collapse point outward reclaims that footage almost all at once; Restore footage is the precise way back.
+- Auto zooms whose click falls inside removed footage disappear (9a rule), so the browser test's "zoom clips over the gap unchanged" check uses a hand zoom.
+- Hidden-cursor ranges have no timeline track today; they ripple with the footage (9a) but there is nothing to draw.
+- At ≤ 480 px the Split and Add zoom buttons show icons only (with accessible names), because the extra tool buttons made the 390 px layout scroll sideways (caught by `browser-smoke`).
+

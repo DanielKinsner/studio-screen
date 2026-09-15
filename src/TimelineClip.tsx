@@ -1,10 +1,27 @@
 import { useRef, useState } from "react";
 import { clamp } from "./timeline";
 type Range = { start: number; end: number };
+
+/** How the timeline maps source time onto its collapsed (ripple-aware) axis. */
+export type Axis = {
+  /** Timeline length in seconds: the source duration minus ripple cuts. */
+  total: number;
+  /** Source duration in seconds. */
+  duration: number;
+  /** Source time → timeline seconds. */
+  tl: (t: number) => number;
+  /** Timeline seconds → source time. */
+  src: (x: number) => number;
+};
+/** Where source time t sits across the timeline, in percent. */
+export const percent = (axis: Axis, t: number) =>
+  (axis.tl(t) / axis.total) * 100;
+
 export default function TimelineClip({
+  id,
   start,
   end,
-  duration,
+  axis,
   label,
   kind,
   selected,
@@ -12,8 +29,11 @@ export default function TimelineClip({
   onChange,
   auto,
   onRemove,
+  snap,
+  onSnapLine,
 }: Range & {
-  duration: number;
+  id: string;
+  axis: Axis;
   label: string;
   kind: string;
   selected: boolean;
@@ -22,16 +42,23 @@ export default function TimelineClip({
   /** Made by the automatic edit: dashed, with a one-click remove. */
   auto?: boolean;
   onRemove?: () => void;
+  /** Snap a timeline position (seconds), ignoring this clip's own edges. */
+  snap?: (x: number, exclude: string) => number;
+  /** Show (or with null, hide) the snap line at a timeline position. */
+  onSnapLine?: (x: number | null) => void;
 }) {
   const [draft, setDraft] = useState<Range | null>(null);
   const drag = useRef<{
     x: number;
     width: number;
     mode: string;
+    a: number;
+    b: number;
     value: Range;
     changed: boolean;
   } | null>(null);
   const v = draft || { start, end };
+  const left = percent(axis, v.start);
   return (
     <div
       role="button"
@@ -40,11 +67,12 @@ export default function TimelineClip({
       aria-pressed={selected}
       className={`${kind}-clip draggable-clip ${selected ? "selected" : ""} ${auto ? "auto" : ""}`}
       style={{
-        left: `${(v.start / duration) * 100}%`,
-        width: `${((v.end - v.start) / duration) * 100}%`,
+        left: `${left}%`,
+        width: `${percent(axis, v.end) - left}%`,
       }}
       onPointerDown={(e) => {
         e.stopPropagation();
+        if (e.button !== 0) return;
         e.preventDefault();
         onSelect();
         e.currentTarget.focus();
@@ -53,37 +81,65 @@ export default function TimelineClip({
           x: e.clientX,
           width: e.currentTarget.parentElement!.getBoundingClientRect().width,
           mode: (e.target as HTMLElement).dataset.edge || "move",
+          a: axis.tl(start),
+          b: axis.tl(end),
           value: { start, end },
           changed: false,
         };
       }}
       onPointerMove={(e) => {
-        if (!drag.current) return;
-        const d = drag.current,
-          delta = ((e.clientX - d.x) / d.width) * duration;
+        const d = drag.current;
+        if (!d) return;
+        const delta = ((e.clientX - d.x) / d.width) * axis.total;
         d.changed = d.changed || Math.abs(e.clientX - d.x) > 3;
-        let next;
-        if (d.mode === "start")
-          next = { start: clamp(start + delta, 0, end - 0.1), end };
-        else if (d.mode === "end")
-          next = { start, end: clamp(end + delta, start + 0.1, duration) };
-        else {
-          const a = clamp(start + delta, 0, duration - (end - start));
-          next = { start: a, end: a + end - start };
+        const to = (x: number) => (snap ? snap(x, id) : x);
+        let next: Range,
+          line: number | null = null;
+        if (d.mode === "start") {
+          const x = to(d.a + delta);
+          if (x !== d.a + delta) line = x;
+          next = { start: clamp(axis.src(x), 0, end - 0.1), end };
+        } else if (d.mode === "end") {
+          const x = to(d.b + delta);
+          if (x !== d.b + delta) line = x;
+          next = {
+            start,
+            end: clamp(axis.src(x), start + 0.1, axis.duration),
+          };
+        } else {
+          // Moving: whichever edge is closer to a snap target wins.
+          const a = d.a + delta,
+            b = d.b + delta;
+          const sa = to(a) - a,
+            sb = to(b) - b;
+          let shift = 0;
+          if (sa && (!sb || Math.abs(sa) <= Math.abs(sb))) {
+            shift = sa;
+            line = a + sa;
+          } else if (sb) {
+            shift = sb;
+            line = b + sb;
+          }
+          const length = d.b - d.a;
+          const from = clamp(a + shift, 0, Math.max(0, axis.total - length));
+          next = { start: axis.src(from), end: axis.src(from + length) };
         }
         d.value = next;
         setDraft(next);
+        onSnapLine?.(d.changed ? line : null);
       }}
       onPointerUp={(e) => {
         e.stopPropagation();
         const d = drag.current;
         drag.current = null;
         setDraft(null);
+        onSnapLine?.(null);
         if (d?.changed) onChange(d.value);
       }}
       onPointerCancel={() => {
         drag.current = null;
         setDraft(null);
+        onSnapLine?.(null);
       }}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -96,9 +152,12 @@ export default function TimelineClip({
           const delta =
             (e.key === "ArrowLeft" ? -1 : 1) * (e.shiftKey ? 1 : 0.1);
           if (e.altKey)
-            onChange({ start, end: clamp(end + delta, start + 0.1, duration) });
+            onChange({
+              start,
+              end: clamp(end + delta, start + 0.1, axis.duration),
+            });
           else {
-            const a = clamp(start + delta, 0, duration - (end - start));
+            const a = clamp(start + delta, 0, axis.duration - (end - start));
             onChange({ start: a, end: a + end - start });
           }
         }

@@ -1,4 +1,20 @@
-import TimelineClip from "./TimelineClip";
+import TimelineClip, { percent, type Axis } from "./TimelineClip";
+import ScreenTrack, { type MenuTarget } from "./ScreenTrack";
+import TimelineMenu, { type MenuItem } from "./TimelineMenu";
+import {
+  closeGap,
+  deletePiece,
+  dragEdge,
+  editPoints,
+  pieces,
+  restore,
+  snapValue,
+  sourceFromTimeline,
+  splitAt,
+  timelineDuration,
+  timelineTime,
+  type Edge,
+} from "./edits";
 import { usePreviewSize } from "./usePreviewSize";
 import { fadeAt, clickEvents, playClick } from "./sound";
 import {
@@ -24,11 +40,11 @@ import {
   Copy,
   Download,
   Expand,
-  FileVideo,
   FolderOpen,
   ImagePlus,
   Layers,
   LoaderCircle,
+  Magnet,
   Maximize,
   Monitor,
   MousePointer2,
@@ -43,6 +59,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Square,
+  SquareSplitHorizontal,
   Subtitles,
   Trash2,
   Type,
@@ -110,6 +127,13 @@ const tabs = [
   { id: "annotations", label: "Annotate", icon: Type },
 ];
 const uid = () => crypto.randomUUID();
+/** The timeline's collapsed axis for a project (ripple cuts take no width). */
+const axisFor = (p: Project): Axis => ({
+  total: Math.max(1e-6, timelineDuration(p)),
+  duration: p.duration,
+  tl: (t) => timelineTime(p, t),
+  src: (x) => sourceFromTimeline(p, x),
+});
 /** The folder a saved file is in, by name ("Exports"). */
 const folderName = (file: string) =>
   file.split(/[\\/]/).slice(-2, -1)[0] || file;
@@ -274,6 +298,25 @@ export default function App() {
   });
   const timelineRef = useRef<HTMLElement>(null);
   const timelineDrag = useRef<{ y: number; height: number } | null>(null);
+  // Premiere-style timeline tools: V selects, C is the razor, S toggles snapping.
+  const [tool, setTool] = useState<"select" | "razor">("select");
+  const [snapOn, setSnapOn] = useState(() => {
+    try {
+      return localStorage.getItem("studio-snap") !== "off";
+    } catch {
+      return true;
+    }
+  });
+  /** The project as drawn while an edit point is being dragged. */
+  const [draft, setDraft] = useState<Project | null>(null);
+  /** Timeline position (seconds) of the snap line, while something is snapped. */
+  const [snapLine, setSnapLine] = useState<number | null>(null);
+  const [menu, setMenu] = useState<{
+    x: number;
+    y: number;
+    target: MenuTarget;
+  } | null>(null);
+  const tracksRef = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const video = useRef<HTMLVideoElement | null>(null);
   // The paused preview holds its last good picture while seeks land, and
@@ -312,7 +355,6 @@ export default function App() {
   const s = project.settings;
   const previewSize = usePreviewSize(canvas, s.aspect);
   const duration = outputDuration(project);
-  const zooms = autoZooms(project);
   const notify = useCallback((value: string) => {
     setToastAction(null);
     setToast(value);
@@ -531,8 +573,8 @@ export default function App() {
     if (timeTextRef.current)
       timeTextRef.current.textContent = timecode(outputTimeAt(project, time));
     if (playheadRef.current)
-      playheadRef.current.style.left = `${(time / project.duration) * 100}%`;
-  }, [playing, project, time]);
+      playheadRef.current.style.left = `${percent(axisFor(draft ?? project), time)}%`;
+  }, [playing, project, draft, time]);
   useEffect(() => {
     if (!playing) {
       video.current?.pause();
@@ -609,7 +651,7 @@ export default function App() {
       draw(p, next);
       if (timeTextRef.current) timeTextRef.current.textContent = timecode(out);
       if (playheadRef.current)
-        playheadRef.current.style.left = `${(next / p.duration) * 100}%`;
+        playheadRef.current.style.left = `${percent(axisFor(p), next)}%`;
       frame = requestAnimationFrame(tick);
     };
     const v = video.current;
@@ -635,21 +677,67 @@ export default function App() {
       setTime(tRef.current);
     };
   }, [playing, s.speed, s.volume, s.musicVolume, notify]);
-  const removeSelected = useCallback(() => {
-    if (!selected) return;
-    edit((p) => ({
-      ...p,
-      zooms: p.zooms.filter((z) => z.id !== selected),
-      dismissedZooms: selected.startsWith("auto-")
-        ? [...p.dismissedZooms, selected]
-        : p.dismissedZooms,
-      captions: p.captions.filter((c) => c.id !== selected),
-      annotations: p.annotations.filter((a) => a.id !== selected),
-      cuts: p.cuts.filter((c) => c.id !== selected),
-      speeds: p.speeds.filter((c) => c.id !== selected),
-    }));
-    setSelected(null);
-  }, [selected, edit]);
+  /**
+   * Delete: a piece leaves a gap (Shift: ripple), a gap closes up, anything
+   * else on the timeline is removed.
+   */
+  const removeSelected = useCallback(
+    (ripple = false) => {
+      if (!selected) return;
+      const p = stateRef.current;
+      const piece = pieces(p).find((x) => x.id === selected);
+      if (piece) {
+        const next = deletePiece(p, piece, { ripple });
+        if (next === p) {
+          notify("Keep at least a little footage in your project.");
+          return;
+        }
+        edit(() => next);
+        setSelected(null);
+        return;
+      }
+      const cut = p.cuts.find((c) => c.id === selected);
+      if (cut) {
+        if (!cut.ripple) edit((v) => closeGap(v, cut.id));
+        setSelected(null);
+        return;
+      }
+      if (ripple) return;
+      edit((p) => ({
+        ...p,
+        zooms: p.zooms.filter((z) => z.id !== selected),
+        dismissedZooms: selected.startsWith("auto-")
+          ? [...p.dismissedZooms, selected]
+          : p.dismissedZooms,
+        captions: p.captions.filter((c) => c.id !== selected),
+        annotations: p.annotations.filter((a) => a.id !== selected),
+        speeds: p.speeds.filter((c) => c.id !== selected),
+      }));
+      setSelected(null);
+    },
+    [selected, edit, notify],
+  );
+  /** Split the footage at a source time (the playhead unless given). */
+  const splitHere = useCallback(
+    (t: number, quiet = false) => {
+      const p = stateRef.current;
+      const next = splitAt(p, t);
+      if (next !== p) edit(() => next);
+      else if (!quiet)
+        notify(
+          "Move the playhead onto the footage, away from an existing edit, to split there.",
+        );
+    },
+    [edit, notify],
+  );
+  const toggleSnap = useCallback(() => {
+    setSnapOn((on) => {
+      try {
+        localStorage.setItem("studio-snap", on ? "off" : "on");
+      } catch {}
+      return !on;
+    });
+  }, []);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       // Esc lets go of the selection unless a text field or menu wants it.
@@ -662,6 +750,7 @@ export default function App() {
         )
       ) {
         setSelected(null);
+        setTool("select");
         return;
       }
       // Undo and redo also work right after dragging a slider, while it still
@@ -698,6 +787,17 @@ export default function App() {
         setModal("export");
         void runExportRef.current(true);
       }
+      // Premiere keys: Ctrl+K splits at the playhead, C razor, V select, S snap.
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        splitHere(tRef.current);
+      }
+      if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+        const letter = e.key.toLowerCase();
+        if (letter === "c") setTool("razor");
+        if (letter === "v") setTool("select");
+        if (letter === "s") toggleSnap();
+      }
       if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
         e.preventDefault();
         setPlaying(false);
@@ -710,7 +810,10 @@ export default function App() {
           ),
         );
       }
-      if (e.key === "Delete" || e.key === "Backspace") removeSelected();
+      if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        removeSelected(e.shiftKey);
+      }
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
@@ -722,6 +825,8 @@ export default function App() {
     project.trimStart,
     project.trimEnd,
     removeSelected,
+    splitHere,
+    toggleSnap,
   ]);
   useEffect(
     () =>
@@ -1035,20 +1140,6 @@ export default function App() {
         : "Zoom added. Adjust its focus point in the inspector.",
     );
   }
-  function addCut() {
-    const start = Math.min(tRef.current, project.trimEnd - 0.15),
-      end = Math.min(start + 1, project.trimEnd);
-    if (duration <= (end - start) / s.speed + 0.1) {
-      notify("Keep at least a little footage in your project.");
-      return;
-    }
-    const id = uid();
-    edit((p) => ({ ...p, cuts: [...p.cuts, { id, start, end }] }));
-    setSelected(id);
-    notify(
-      "Removed one second from this point. Undo to restore it, or adjust the cut below.",
-    );
-  }
   runExportRef.current = runExport;
   /** `quick` (Ctrl+E) saves next to the last export without asking where. */
   async function runExport(quick = false) {
@@ -1142,21 +1233,156 @@ export default function App() {
   };
   const chosenAnnotation = project.annotations.find((a) => a.id === selected),
     chosenCut = project.cuts.find((c) => c.id === selected);
-  const scrub = (e: React.PointerEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const next = clamp(
-      ((e.clientX - rect.left) / rect.width) * project.duration,
-      project.trimStart,
-      project.trimEnd,
+  /**
+   * Snap a timeline position (seconds) to nearby edit points within 8 CSS px:
+   * the playhead, piece, split and gap boundaries, trim ends, and the starts
+   * and ends of other clips.
+   */
+  const snapX = (x: number, exclude?: string, withPlayhead = true) => {
+    const tracks = tracksRef.current;
+    if (!snapOn || !tracks) return x;
+    const p = stateRef.current,
+      a = axisFor(p);
+    const edges = (items: { id: string; start: number; end: number }[]) =>
+      items.filter((v) => v.id !== exclude).flatMap((v) => [v.start, v.end]);
+    const targets = [
+      ...(withPlayhead ? [tRef.current] : []),
+      ...editPoints(p),
+      ...edges(autoZooms(p)),
+      ...edges(p.captions),
+      ...edges(p.annotations),
+      ...edges(p.speeds),
+    ].map(a.tl);
+    return snapValue(
+      x,
+      targets,
+      (8 / tracks.getBoundingClientRect().width) * a.total,
     );
+  };
+  const scrubTo = (clientX: number) => {
+    const tracks = tracksRef.current;
+    if (!tracks) return;
+    const p = stateRef.current,
+      a = axisFor(p);
+    const rect = tracks.getBoundingClientRect();
+    const raw = clamp(((clientX - rect.left) / rect.width) * a.total, 0, a.total);
+    const x = snapX(raw, undefined, false);
+    setSnapLine(x !== raw ? x : null);
     setPlaying(false);
-    seekTo(next);
+    seekTo(clamp(a.src(x), p.trimStart, p.trimEnd));
+  };
+  const scrub = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.type === "pointerdown") {
-      // Clips, cuts and buttons stop their own presses, so this is empty space.
+      // Clips, gaps and buttons stop their own presses, so this is empty space.
       setSelected(null);
+      if (e.button !== 0) return;
       e.currentTarget.setPointerCapture(e.pointerId);
     }
+    scrubTo(e.clientX);
   };
+  /** A press on a piece of footage selects it and scrubs from there. */
+  const scrubFromPiece = (e: React.PointerEvent) => {
+    tracksRef.current?.setPointerCapture(e.pointerId);
+    scrubTo(e.clientX);
+  };
+  /** Drag an edit point (trim grip, split or gap edge); one undo step on release. */
+  const startEdgeDrag = (e: React.PointerEvent, edge: Edge, at: number) => {
+    e.stopPropagation();
+    if (e.button !== 0 || !tracksRef.current) return;
+    e.preventDefault();
+    const base = stateRef.current,
+      a = axisFor(base),
+      width = tracksRef.current.getBoundingClientRect().width,
+      x0 = e.clientX,
+      from = a.tl(at),
+      id = uid();
+    let result = base;
+    const move = (ev: PointerEvent) => {
+      const raw = from + ((ev.clientX - x0) / width) * a.total;
+      const x = snapX(raw);
+      setSnapLine(x !== raw ? x : null);
+      result = dragEdge(base, edge, a.src(x), ev.shiftKey, id);
+      setDraft(result === base ? null : result);
+    };
+    const finish = (commit: boolean) => () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", done);
+      window.removeEventListener("pointercancel", cancel);
+      setDraft(null);
+      setSnapLine(null);
+      if (commit && result !== base) edit(() => result);
+    };
+    const done = finish(true),
+      cancel = finish(false);
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", done);
+    window.addEventListener("pointercancel", cancel);
+  };
+  const openMenu = (e: React.MouseEvent, target: MenuTarget) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setSelected(target.kind === "piece" ? target.piece.id : target.id);
+    setMenu({ x: e.clientX, y: e.clientY, target });
+  };
+  const closeMenu = useCallback(() => setMenu(null), []);
+  const menuItems = (target: MenuTarget): MenuItem[] => {
+    const change = (fn: (p: Project) => Project) => {
+      const p = stateRef.current,
+        next = fn(p);
+      if (next === p) notify("Keep at least a little footage in your project.");
+      else edit(() => next);
+      setSelected(null);
+    };
+    if (target.kind === "piece") {
+      const { piece } = target;
+      return [
+        {
+          label: "Split at playhead",
+          hint: "Ctrl+K",
+          disabled: !(tRef.current > piece.start && tRef.current < piece.end),
+          run: () => splitHere(tRef.current),
+        },
+        {
+          label: "Delete (leave gap)",
+          hint: "Delete",
+          run: () => change((p) => deletePiece(p, piece, { ripple: false })),
+        },
+        {
+          label: "Ripple delete",
+          hint: "Shift+Delete",
+          run: () => change((p) => deletePiece(p, piece, { ripple: true })),
+        },
+      ];
+    }
+    const restoreItem = {
+      label: "Restore footage",
+      run: () => change((p) => restore(p, target.id)),
+    };
+    if (target.kind === "ripple") return [restoreItem];
+    return [
+      {
+        label: "Close gap",
+        hint: "Delete",
+        run: () => change((p) => closeGap(p, target.id)),
+      },
+      restoreItem,
+    ];
+  };
+  const shown = draft ?? project;
+  const axis = axisFor(shown);
+  const clipProps = {
+    axis,
+    snap: (x: number, exclude: string) => snapX(x, exclude),
+    onSnapLine: setSnapLine,
+  };
+  const filmstripTimes = (() => {
+    const a = axisFor(project),
+      from = a.tl(project.trimStart),
+      to = a.tl(project.trimEnd);
+    return Array.from({ length: 12 }, (_, i) =>
+      a.src(from + ((to - from) * i) / 12),
+    );
+  })();
   return (
     <div
       className="app-shell"
@@ -1472,24 +1698,60 @@ export default function App() {
             />
             <div className="timeline-toolbar">
               <div>
-                <button className="timeline-button" onClick={addCut}>
-                  <Scissors size={15} />
-                  Remove 1s
+                <div
+                  className="tool-group"
+                  role="group"
+                  aria-label="Timeline tool"
+                >
+                  <IconButton
+                    label="Select tool (V)"
+                    pressed={tool === "select"}
+                    onClick={() => setTool("select")}
+                  >
+                    <MousePointer2 size={15} />
+                  </IconButton>
+                  <IconButton
+                    label="Razor tool (C)"
+                    pressed={tool === "razor"}
+                    onClick={() => setTool(tool === "razor" ? "select" : "razor")}
+                  >
+                    <Scissors size={15} />
+                  </IconButton>
+                </div>
+                <button
+                  className="timeline-button"
+                  aria-label="Split"
+                  title="Split at the playhead (Ctrl+K)"
+                  onClick={() => splitHere(tRef.current)}
+                >
+                  <SquareSplitHorizontal size={15} />
+                  <span>Split</span>
                 </button>
-                <button className="timeline-button" onClick={() => addZoom()}>
+                <button
+                  className="timeline-button"
+                  aria-label="Add zoom"
+                  onClick={() => addZoom()}
+                >
                   <ZoomIn size={15} />
-                  Add zoom
+                  <span>Add zoom</span>
                 </button>
                 <span className="vertical-line" />
                 <IconButton
                   label="Delete selected edit"
                   disabled={!selected}
-                  onClick={removeSelected}
+                  onClick={() => removeSelected()}
                 >
                   <Trash2 size={14} />
                 </IconButton>
               </div>
               <div>
+                <IconButton
+                  label={`Snapping (S): ${snapOn ? "on" : "off"}`}
+                  pressed={snapOn}
+                  onClick={toggleSnap}
+                >
+                  <Magnet size={15} />
+                </IconButton>
                 <span className="timeline-duration">
                   {timecode(duration)} duration
                 </span>
@@ -1533,7 +1795,8 @@ export default function App() {
               </div>
               <div className="tracks-scroll">
                 <div
-                  className="tracks"
+                  className={`tracks ${tool === "razor" ? "razor" : ""}`}
+                  ref={tracksRef}
                   style={{ width: `${timelineScale * 100}%` }}
                   onPointerDown={scrub}
                   onPointerMove={(e) => {
@@ -1543,54 +1806,41 @@ export default function App() {
                     )
                       scrub(e);
                   }}
+                  onPointerUp={() => setSnapLine(null)}
+                  onContextMenu={(e) => e.preventDefault()}
                 >
                   <div className="time-ruler">
                     {Array.from({ length: 9 }, (_, i) => (
                       <span key={i} style={{ left: `${(i / 8) * 100}%` }}>
-                        {timecode((project.duration * i) / 8)}
+                        {timecode((axis.total * i) / 8)}
                       </span>
                     ))}
                   </div>
-                  <div className="screen-track">
-                    <div
-                      className="screen-clip"
-                      style={{
-                        left: `${(project.trimStart / project.duration) * 100}%`,
-                        width: `${((project.trimEnd - project.trimStart) / project.duration) * 100}%`,
-                      }}
-                    >
-                      <span className="clip-grip">Ⅱ</span>
-                      <Filmstrip project={project} />
-                      <div className="clip-title">
-                        <FileVideo size={12} />
-                        {project.demo
-                          ? "Creative workspace · sample"
-                          : project.name}
-                      </div>
-                      <span className="clip-grip end">Ⅱ</span>
-                    </div>
-                    {project.cuts.map((c) => (
-                      <button
-                        title={`Cut ${timecode(c.start)} to ${timecode(c.end)}`}
-                        key={c.id}
-                        className={`cut-region ${selected === c.id ? "selected" : ""}`}
-                        style={{
-                          left: `${(c.start / project.duration) * 100}%`,
-                          width: `${((c.end - c.start) / project.duration) * 100}%`,
-                        }}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onClick={() => setSelected(c.id)}
-                      >
-                        <Scissors size={12} />
-                      </button>
-                    ))}
-                  </div>
+                  <ScreenTrack
+                    project={shown}
+                    axis={axis}
+                    selected={selected}
+                    tool={tool}
+                    title={
+                      project.demo ? "Creative workspace · sample" : project.name
+                    }
+                    strip={<Filmstrip project={project} times={filmstripTimes} />}
+                    onSelect={(id) => {
+                      setSelected(id);
+                      setPlaying(false);
+                    }}
+                    onScrub={scrubFromPiece}
+                    onSplit={(t) => splitHere(t, true)}
+                    onEdgeDrag={startEdgeDrag}
+                    onMenu={openMenu}
+                    snap={(x) => snapX(x)}
+                  />
                   <div className="zoom-track">
-                    {zooms.map((z) => (
+                    {autoZooms(shown).map((z) => (
                       <TimelineClip
                         key={z.id}
                         {...z}
-                        duration={project.duration}
+                        {...clipProps}
                         label={`${(z.mode || s.motionMode) === "3d" ? "3D" : "2D"} · ${z.scale.toFixed(1)}×`}
                         kind="zoom"
                         auto={
@@ -1624,11 +1874,11 @@ export default function App() {
                     ))}
                   </div>
                   <div className="caption-track">
-                    {project.captions.map((c) => (
+                    {shown.captions.map((c) => (
                       <TimelineClip
                         key={c.id}
                         {...c}
-                        duration={project.duration}
+                        {...clipProps}
                         label={c.text}
                         kind="caption"
                         selected={selected === c.id}
@@ -1650,11 +1900,11 @@ export default function App() {
                     ))}
                   </div>
                   <div className="annotation-track">
-                    {project.annotations.map((a) => (
+                    {shown.annotations.map((a) => (
                       <TimelineClip
                         key={a.id}
                         {...a}
-                        duration={project.duration}
+                        {...clipProps}
                         label={a.type === "blur" ? "Redact" : a.type}
                         kind="annotation"
                         selected={selected === a.id}
@@ -1676,11 +1926,11 @@ export default function App() {
                     ))}
                   </div>
                   <div className="speed-track">
-                    {project.speeds.map((a) => (
+                    {shown.speeds.map((a) => (
                       <TimelineClip
                         key={a.id}
                         {...a}
-                        duration={project.duration}
+                        {...clipProps}
                         label={`${a.rate}× speed`}
                         kind="speed"
                         auto={a.auto}
@@ -1711,6 +1961,12 @@ export default function App() {
                   <div className="playhead" ref={playheadRef}>
                     <span />
                   </div>
+                  {snapLine !== null && (
+                    <span
+                      className="snap-line"
+                      style={{ left: `${(snapLine / axis.total) * 100}%` }}
+                    />
+                  )}
                 </div>
               </div>
             </div>
@@ -2472,6 +2728,21 @@ export default function App() {
           Less editing. More creating.<span className="version">v0.2.1</span>
         </span>
       </footer>
+      {menu && (
+        <TimelineMenu
+          x={menu.x}
+          y={menu.y}
+          label={
+            menu.target.kind === "piece"
+              ? "Clip actions"
+              : menu.target.kind === "gap"
+                ? "Gap actions"
+                : "Removed footage"
+          }
+          items={menuItems(menu.target)}
+          onClose={closeMenu}
+        />
+      )}
       {toast && (
         <div className="toast" role="status">
           <span>{toast}</span>
@@ -2894,7 +3165,11 @@ export default function App() {
               ["Skip one second", "Shift + ← / →"],
               ["Undo", "Ctrl / ⌘ + Z"],
               ["Redo", "Ctrl / ⌘ + Shift + Z"],
-              ["Remove selected edit", "Delete"],
+              ["Remove selected edit (a clip leaves a gap)", "Delete"],
+              ["Split at the playhead", "Ctrl + K"],
+              ["Ripple delete the selected clip", "Shift + Delete"],
+              ["Razor tool / select tool", "C / V"],
+              ["Snapping on or off", "S"],
               ["Stop desktop recording", "Ctrl + Shift + R"],
               ["Quick export (last settings)", "Ctrl + E"],
               ["Bigger / smaller interface", "Ctrl + = / Ctrl + −"],

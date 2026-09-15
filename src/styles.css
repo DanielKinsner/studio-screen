@@ -819,6 +819,160 @@ p {
 }
 .cut-region.selected {
   border-color: #ffd4b8;
+  box-shadow: 0 0 0 1px #ffd4b8;
+}
+/* Pieces of footage between split points, drawn over the filmstrip. */
+.screen-piece {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  z-index: 1;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.screen-piece.divided::before {
+  content: "";
+  position: absolute;
+  left: -2px;
+  top: -1px;
+  bottom: -1px;
+  width: 3px;
+  background: #1d1f21;
+}
+.screen-piece:hover {
+  border-color: #ffffff38;
+}
+.screen-piece.selected {
+  border-color: #f2b18f;
+  box-shadow: 0 0 0 1px #f2b18f;
+}
+.piece-edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 8px;
+  z-index: 2;
+  cursor: ew-resize;
+}
+.piece-edge[data-edge="end"] {
+  left: auto;
+  right: 0;
+}
+.piece-edge:hover,
+.screen-piece.selected .piece-edge {
+  background: #f2b18f55;
+}
+.screen-clip .clip-grip {
+  z-index: 3;
+  cursor: ew-resize;
+  touch-action: none;
+}
+/* Where rippled footage collapsed: right-click to restore it. */
+.ripple-marker {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  width: 12px;
+  margin-left: -6px;
+  z-index: 3;
+  cursor: context-menu;
+}
+.ripple-marker::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 3px;
+  bottom: 3px;
+  width: 2px;
+  border-radius: 1px;
+  background: #e5826d;
+}
+.ripple-marker::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 0;
+  width: 8px;
+  height: 8px;
+  background: #e5826d;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+.ripple-marker:hover::before,
+.ripple-marker:hover::after {
+  background: #ffc2ad;
+}
+/* The razor tool: scissors cursor and a hover line where it will split. */
+.tracks.razor .screen-track,
+.tracks.razor .screen-piece {
+  cursor:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke-linecap='round' stroke-linejoin='round'><g stroke='black' stroke-width='4'><circle cx='6' cy='6' r='3'/><path d='M8.12 8.12 12 12'/><path d='M20 4 8.12 15.88'/><circle cx='6' cy='18' r='3'/><path d='M14.8 14.8 20 20'/></g><g stroke='white' stroke-width='2'><circle cx='6' cy='6' r='3'/><path d='M8.12 8.12 12 12'/><path d='M20 4 8.12 15.88'/><circle cx='6' cy='18' r='3'/><path d='M14.8 14.8 20 20'/></g></svg>")
+      12 12,
+    crosshair;
+}
+.razor-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  z-index: 5;
+  background: #ffd9c4;
+  pointer-events: none;
+}
+.snap-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  z-index: 6;
+  background: var(--orange);
+  box-shadow: 0 0 6px #eda888aa;
+  pointer-events: none;
+}
+.tool-group {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  margin-right: 4px;
+  border-radius: 7px;
+  background: #26292b;
+}
+.context-menu {
+  position: fixed;
+  z-index: 70;
+  min-width: 220px;
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+  background: #222626;
+  border: 1px solid #434a43;
+  border-radius: 9px;
+  box-shadow: 0 14px 40px #0008;
+}
+.context-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  color: #e0e5d9;
+  font-size: var(--text-label);
+  text-align: left;
+}
+.context-menu button:hover:not(:disabled),
+.context-menu button:focus-visible {
+  background: #343a36;
+  outline: none;
+}
+.context-menu button:disabled {
+  color: #858c87;
+  cursor: default;
+}
+.context-menu kbd {
+  font-size: var(--text-micro);
 }
 .playhead {
   position: absolute;
@@ -2208,6 +2362,13 @@ input[type="range"]::-moz-range-thumb {
   }
 }
 @media (max-width: 480px) {
+  /* Split and Add zoom keep their icons; the words don't fit a phone. */
+  .timeline-button > span {
+    display: none;
+  }
+  .tool-group {
+    margin-right: 0;
+  }
   .topbar {
     padding: 0 10px;
     gap: 9px;

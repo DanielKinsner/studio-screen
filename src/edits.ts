@@ -186,6 +186,20 @@ export function sourceFromTimeline(p: Project, x: number) {
 /** Length of the timeline: the source duration minus ripple cuts. */
 export const timelineDuration = (p: Project) => timelineTime(p, p.duration);
 
+/** The nearest target within `tolerance` of x, or x itself (snapping). */
+export function snapValue(x: number, targets: number[], tolerance: number) {
+  let best = x,
+    distance = tolerance;
+  for (const target of targets) {
+    const d = Math.abs(target - x);
+    if (d <= distance) {
+      best = target;
+      distance = d;
+    }
+  }
+  return best;
+}
+
 /** A draggable edit point on the screen track. */
 export type Edge =
   | { kind: "trim-start" }

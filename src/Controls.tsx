@@ -5,18 +5,22 @@ export function IconButton({
   onClick,
   disabled,
   active,
+  pressed,
 }: {
   label: string;
   children: ReactNode;
   onClick?: () => void;
   disabled?: boolean;
   active?: boolean;
+  /** A toggle: shown as active and announced as pressed. */
+  pressed?: boolean;
 }) {
   return (
     <button
-      className={`icon-button ${active ? "active" : ""}`}
+      className={`icon-button ${active || pressed ? "active" : ""}`}
       title={label}
       aria-label={label}
+      aria-pressed={pressed}
       onClick={onClick}
       disabled={disabled}
     >

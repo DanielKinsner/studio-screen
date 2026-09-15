@@ -669,10 +669,11 @@ export function TimelineEdits({
           {p.cuts.map((c) => (
             <div className="cut-editor" key={c.id}>
               <span>
-                {c.start.toFixed(1)} – {c.end.toFixed(1)} sec
+                {c.ripple ? "Closed gap" : "Gap"} · {c.start.toFixed(1)} –{" "}
+                {c.end.toFixed(1)} sec
               </span>
               <IconButton
-                label="Restore cut"
+                label="Restore footage"
                 onClick={() =>
                   edit((p) => ({
                     ...p,

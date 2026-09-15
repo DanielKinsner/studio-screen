@@ -2,8 +2,16 @@ import { useEffect, useRef } from "react";
 import type { Project } from "./types";
 import { demoFrame } from "./compositor";
 import { loadVideo, releaseVideo, seek } from "./media";
-export default function Filmstrip({ project }: { project: Project }) {
+/** Twelve thumbnails of the trimmed footage, sampled at the given source times. */
+export default function Filmstrip({
+  project,
+  times,
+}: {
+  project: Project;
+  times: number[];
+}) {
   const ref = useRef<HTMLDivElement>(null);
+  const key = times.map((t) => t.toFixed(3)).join(",");
   useEffect(() => {
     let alive = true;
     let video: HTMLVideoElement | undefined;
@@ -19,9 +27,7 @@ export default function Filmstrip({ project }: { project: Project }) {
         if (!frames) return;
         for (let i = 0; i < frames.length; i++) {
           if (!alive) return;
-          const time =
-            project.trimStart +
-            ((project.trimEnd - project.trimStart) * i) / frames.length;
+          const time = +key.split(",")[i] || 0;
           if (video) await seek(video, time);
           if (!alive) return;
           const source = project.demo ? demoFrame(time) : video;
@@ -40,16 +46,10 @@ export default function Filmstrip({ project }: { project: Project }) {
     return () => {
       alive = false;
     };
-  }, [
-    project.video,
-    project.videoUrl,
-    project.demo,
-    project.trimStart,
-    project.trimEnd,
-  ]);
+  }, [project.video, project.videoUrl, project.demo, key]);
   return (
     <div className="clip-thumbnails" ref={ref}>
-      {Array.from({ length: 12 }, (_, i) => (
+      {times.map((_, i) => (
         <canvas width={128} height={72} key={i} aria-hidden="true" />
       ))}
     </div>
