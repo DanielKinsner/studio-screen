@@ -35,6 +35,7 @@ What changed since 0.3.0, in Dan's words from the first hand test:
 | Typing zoom | 7 unit tests; A5 toast shows typing zooms ("36 zooms") | Taste |
 | Focus dot, Alt tilt | 7 mapping unit tests; `focus-dot` browser test; `alt-tilt` desktop test (the menu bar no longer appears on Alt) | Feel |
 | Browser-recording export (WebM) | `webm-export`: 4 of 6 checked seconds were the empty card before the fix, 0 after (whole take and a trim starting mid-cluster); the real 9/15 fallback recordings re-export with picture throughout; `export-formats`, `browser-smoke`, `v2-audio`, `v2-proof` pass | A3 not re-run after this fix (MP4 path unchanged) |
+| Desktop-recording export (MP4) | `native-export-frames`: 624 of 1,050 exported frames wrong before the fix, 0 after (60 fps, 30 fps, trimmed mid-fragment); Dan's four real takes: 0 of 12,059 frames timed differently from FFprobe after the fix; re-exporting his 14.16.48 take: 7–14.6 s matches the raw take throughout (the stall and lag are gone); unit tests, build, `webm-export`, `export-formats`, `browser-smoke`, `v2-audio`, `v2-proof` pass | Dan's eyes in Premiere on a repacked build; A3 not re-run (its fixture has no fragments, so the patched code isn't reached) |
 | Build | 0.4.0 portable packed; bundled helper hash matches; packaged smoke passes on the portable and unpacked app (footer shows v0.4.0) | — |
 | Native capture | `native:check` all ✔; A2 passed (0 bar pixels vs 1,069 control); A5 passed (386 ms auto-edit, 845 ms first frame); A4 clicks 0.5 px, cursor 0 px, crash recovery passed | **A/V sync: see heads-up below** |
 
@@ -44,6 +45,13 @@ What changed since 0.3.0, in Dan's words from the first hand test:
 2. **A3 export speed is load-sensitive.** Every A3 run passed on correctness (exact frames, audio, pitch, cancel). The 60 s export beat its 30 s budget in five runs (20.5–25.9 s) and missed it in others (30–40 s) while Codex and Premiere were loading the PC. A side-by-side of old and new code showed the same spread (23–49 s), so it isn't a slowdown from this work.
 3. **`tests/desktop-capture.mjs` is repaired and passes again** (9/15 13:51, both the window and `--region` variants; `audio-proof` and `export-formats` pass on the files it writes). It now expects the auto-edit toast and an export streamed to `tests/.exports`, and it no longer types or clicks on the PC: the browser-capture fallback records no clicks or keys by design (the helper does that), and none at all for a window.
 4. **Fixed: exporting a browser recording with sound showed only its first ~1 s** (then the empty card). Found by that run; native MP4 recordings were never affected. Cause: those WebMs have no index, keyframes seconds apart and a new cluster every second, and mediabunny 1.56.2's lookup by time gives up when a frame's keyframe is in an earlier cluster. The exporter now reads WebM frames in order instead (MP4 keeps the fast lookup). Pinned by `tests/webm-export.mjs`, which fails on the old code. Browser recordings without sound were never affected (their clusters start at keyframes).
+5. **Fixed: exports of normal desktop recordings stalled and ran behind** (found by Dan in Premiere on the 0.4.0 hand test). **0.4.0 has this bug; any pack from before the fix does.**
+   - **What Dan saw:** the export held a frame for ~0.2 s before every other 2 s keyframe, then ran 12–13 frames (~0.2 s) behind its own sound for 2 s, then 6–7 frames behind for 2 s, then caught up, on a 6 s cycle.
+   - **Where:** baked into the exported file, not Premiere. The export is evenly spaced at 60 fps, and 88% of its frames show exactly the raw frame the cause below predicts. The raw recordings are fine, and the editor preview reads them correctly.
+   - **Cause:** the helper's MP4 (written by Windows Media Foundation) has 0.3 s fragments with no start time (`tfdt`) and an index (`mfra`/`tfra`) that names each 2 s keyframe as "sample 13, 7 or 1 of fragment X". mediabunny 1.56.2 discarded the sample number and used the keyframe's time as the fragment's start, so whole fragments were timed 200 or 100 ms late and the exporter picked old frames. This predicts the library's timestamp for all 12,059 frames in Dan's four takes, with no exceptions. FFprobe reads the same files as perfect 1/60 s steps. Since `142402e` (the first build that recorded through the helper); `5eba2b4` doesn't touch it. Upstream mediabunny still has it.
+   - **Fix:** `patches/mediabunny+1.56.2.patch` makes the reader use the index's traf/trun/sample numbers. `npm install` applies it (`postinstall: patch-package`). The helper is unchanged.
+   - **Pinned by** `tests/native-export-frames.mjs`: it builds a clip with the helper's exact layout and a frame-number barcode in every frame, and checks that every exported frame shows the right source frame. It fails on the old reader (252, 126 and 246 wrong frames) and passes with the fix (0 of 1,050). `node tests/native-export-frames.mjs --recording "<take>\recording.mp4"` checks a real take against FFprobe.
+   - **Before a hand re-test:** run `npm install` so the patch is applied, then rebuild the portable. A pack without the patch still stalls.
 
 ## Dan's hand test for 0.4.0
 
@@ -97,6 +105,7 @@ Tell me: which zoom lead feels right, whether typing zooms are welcome, how the 
 2. Pack **0.4.1** once the export-stall fix is on main (`npm install` first so the patched library is bundled), then Dan re-records the YouTube sync clip with it: beep spacing should read 1.000000 s and the export should play smoothly. Then rerun `a4-av-sync` and `a4-native-capture` at the next idle break.
 3. Tune defaults from Dan's answers (zoom lead, typing zoom).
 4. Still unverified from before: the separate 30-minute/4K soak and timed 4K60 export.
+5. Report the mediabunny index bug upstream (Dan decides; `npx patch-package mediabunny --create-issue` drafts it). When a fixed mediabunny ships, upgrade and delete the patch; `native-export-frames` confirms it.
 
 ## Setup on any machine
 
@@ -108,7 +117,7 @@ npm install
 npm run native:check
 ```
 
-Every line should show ✔. `npm run desktop:dev` runs the app from source; `npm run desktop:pack` builds the portable EXE into `release/`.
+Every line should show ✔, and `npm install` should print `mediabunny@1.56.2 ✔` (the export-timing patch). `npm run desktop:dev` runs the app from source; `npm run desktop:pack` builds the portable EXE into `release/`.
 
 ## Open threads and ideas (not started)
 

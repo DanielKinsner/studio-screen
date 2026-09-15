@@ -73,6 +73,7 @@ node tests/a1-playback.mjs
 node tests/editor-interactions.mjs   # deselect, one undo per gesture
 node tests/scrub-frames.mjs          # scrubbing never flashes the empty card
 node tests/webm-export.mjs           # browser recordings export every second's picture
+node tests/native-export-frames.mjs  # desktop recordings export every frame on time (no stalls)
 node tests/3d-fit.mjs                # 3D at padding 0 never crops the card
 node tests/export-location.mjs       # desktop: Save As, Ctrl+E, failures keep files
 node tests/timeline-resize.mjs       # drag the timeline taller; kept; double-click resets
