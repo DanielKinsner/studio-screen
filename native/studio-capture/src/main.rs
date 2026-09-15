@@ -8,6 +8,7 @@
 //! Progress is reported as JSON lines on stdout. `studio-capture check` prints
 //! what this PC supports.
 mod audio;
+mod audio_timeline;
 mod capture;
 mod encoder;
 mod input;
@@ -365,8 +366,8 @@ fn record(config: Config) -> Result<()> {
                         pcm.drain(0..skip * 4);
                         time = audio_next;
                     }
-                    if time > audio_next + 200_000 {
-                        let gap = ((time - audio_next) * 48000 / 10_000_000) as usize;
+                    let gap = audio_timeline::gap_frames(audio_next, time);
+                    if gap > 0 {
                         encoder.write_audio(&vec![0u8; gap * 4], audio_next)?;
                     }
                     audio_next = time + encoder.write_audio(&pcm, time)?;

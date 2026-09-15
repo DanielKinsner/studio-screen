@@ -1,6 +1,6 @@
 # Status — Studio Screen
 
-**Last updated:** 2026-09-14 (verification stopped at the A/V sync gate)
+**Last updated:** 2026-09-14 (verification resumed; native sync under diagnosis)
 
 ## Where things stand
 
@@ -10,23 +10,23 @@ Option A is built and pushed: a readability pass, then phases A1 (smooth camera 
 |---|---|---|
 | Readability | Screenshots at 4K/150% and laptop size; browser tests | Dan's eyes |
 | A1 camera & cursor | Unit tests; 60 fps preview on a 10-min 3D project; playback test | Which camera feel Dan likes |
-| A2 recording UI | Bar/countdown absent from footage (with browser capture, plus a control run) | Same test with the capture helper |
-| A3 export | 60 s 1080p60 in 23 s, exact frames, pitch, cancel, minimized desktop export; portable build bundles the helper | 4K60 export speed; launching the packaged app |
+| A2 recording UI | Native test passed: protected marker 0 pixels, control 1,045; countdown, hidden editor and restored focus | Dan's hand test |
+| A3 export | Latest browser 60 s 1080p60 in 28.1 s; minimized desktop 30.5 s; exact frames, pitch and cancellation passed | 4K60 export speed; launching the packaged app |
 | A4 capture helper | Capability check; smoke take; click accuracy 0.5 px; clicks, right-click, wheel, shortcut, typing, cursor shapes; take survives helper kill; helper stops 0.4 s after app kill; recovery | A clean full pass of the end-to-end test; the 30-minute memory soak; **A/V sync correction not applied (see below)** |
-| A5 auto-edit | Unit tests; browser check of dashed clips, ×, Back to raw | 5-minute take opens in under 3 s (test written, not run) |
+| A5 auto-edit | Five-minute synthetic take: auto-edit 288 ms, first frame 635 ms, saved 1,439 ms; test passed after fixing its autosave race | Dan's hand test |
 
-### Known issue: sound about 49 ms behind the picture
+### Known issue: native audio/video timing
 
-**Latest re-check on this checkout:** setup, all five native capability checks, 61 unit tests, production build, browser smoke and A3 export passed. The idle-gated uncalibrated sync test failed at 2560×1440: six tones, zero flashes, no paired offsets. Its printed mean of 0 is an empty-list fallback, not a measurement. The previous ~49 ms result therefore remains unconfirmed here. The recording and input event log were deleted and their absence verified. See the latest run in [VALIDATION.md](VALIDATION.md).
+**Latest re-check on this checkout:** setup, all five native capability checks, 63 unit tests, production build, browser smoke, A3, native A2 and A5 passed. Correcting fixture placement/crop and audio timestamp handling produced six flashes and six tones. Sync measured **−52 ms uncalibrated** and **−92 ms with −49 ms configured**: audio leads here, so the proposed −49 ms default is not applied. The native end-to-end run measured 0.51 px click error and successful recovery behavior but failed its sync assertion. See [VALIDATION.md](VALIDATION.md) for exact results and test limitations.
 
-On this PC, native recordings put system audio about 49 ms after the matching picture: 47–51 ms across 5 flashes in `tests/a4-av-sync.mjs`. The helper already accepts an `audioOffsetMs` setting, and one run with −49 ms averaged −1 ms. It is **not wired into the app yet**. It also needs a clean re-check after the silence-filler fix (commit 701902a), because the runs after that fix were disturbed by someone using the PC. At a 49 ms offset lip-sync issues are borderline visible; clicks and system sounds will feel slightly late.
+The earlier ~49 ms audio delay was measured on the original PC. Current diagnosis found that the helper leaves audio gaps of 20 ms or less unfilled; a synthetic test through the real AAC encoder reproduced a 1.000 s tone moving to 0.920 s after eight missing 10 ms packets. Explicit gap filling restored 1.000 s. The helper fix passes the synthetic encoder regression and two Rust timeline tests; native remeasurement is pending an idle PC. No fixed offset should be inferred from the earlier results.
 
 ## Next steps (in order)
 
-**Stopped for Dan:** the latest uncalibrated run could not measure sync. The calibrated run, app correction, and subsequent native/A2/A5/soak tests were not attempted. Wait for Dan's review/hand test before resuming; first resolve why the flash detector found no flashes. No new features were started.
+**Dan authorized continuing verification.** Screen recordings are deleted after measurement. No `--force`; capture and input tests wait for idle. The first soak stopped on resumed input after 247.8 s, with a 2 MB settled-memory spread; it is not a completed five-minute pass.
 
-1. With the PC idle, run `node tests/a4-av-sync.mjs` then `node tests/a4-av-sync.mjs --offset-ms -49`. If the second averages within ±20 ms, have `electron/main.cjs` pass `audioOffsetMs: -49` in the helper config (`studio:native-start`), commit, and re-run.
-2. With the PC idle, run in turn: `node tests/a4-native-capture.mjs`, `node tests/a2-recording-ui.mjs`, `node tests/a5-open-speed.mjs`, then `node tests/a4-soak.mjs` (30 minutes; `--minutes 5` for a quick one). Record the results in VALIDATION.md.
+1. With the PC idle, remeasure sync after the audio-gap fix, then rerun `node tests/a4-native-capture.mjs`. Only consider the original −49 ms app correction if the uncalibrated delay is again about +49 ms and the calibrated mean is within ±20 ms; current measurements do not satisfy that gate.
+2. Complete `node tests/a4-soak.mjs --minutes 5` during uninterrupted idle time. The separate 30-minute/4K soak remains unverified; this PC currently records 2560×1440. A2 and A5 passed; rerun if subsequent changes affect them. Record results in VALIDATION.md.
 3. Dan's hand test (below). Tune camera feel from his notes.
 4. Bump `package.json` to 0.3.0 before the next portable build (the new build currently overwrote `release/Studio Screen 0.2.1.exe`).
 
