@@ -86,6 +86,8 @@ import {
   type StopKind,
 } from "./autoEdit";
 import { lastLook, rememberLook } from "./settings";
+import { EditHistory } from "./history";
+import { installGestures, inputGesture, pointerHeld } from "./gesture";
 import { parseEvents } from "./nativeEvents";
 import { capture, getDuration, loadVideo, releaseVideo } from "./media";
 import {
@@ -270,8 +272,7 @@ export default function App() {
     imageInput = useRef<HTMLInputElement>(null),
     audioInput = useRef<HTMLInputElement>(null),
     captionInput = useRef<HTMLInputElement>(null);
-  const history = useRef<Project[]>([]),
-    future = useRef<Project[]>([]);
+  const history = useRef(new EditHistory<Project>());
   const stateRef = useRef(project);
   stateRef.current = project;
   // The live playhead. While playing, the animation loop owns it and draws
@@ -302,28 +303,38 @@ export default function App() {
     },
     [],
   );
-  const edit = useCallback((fn: (p: Project) => Project) => {
-    const previous = stateRef.current;
-    const next = fn(previous);
-    history.current = [...history.current.slice(-39), previous];
-    future.current = [];
-    stateRef.current = next;
-    setProject(next);
-  }, []);
+  useEffect(() => installGestures(), []);
+  /**
+   * Apply an edit as an undo step. Edits from one continuous gesture (a slider
+   * drag, typing a number) merge into one step: pass `gesture` for pointer
+   * drags on custom controls; inputs are recognised automatically.
+   */
+  const edit = useCallback(
+    (fn: (p: Project) => Project, options: { gesture?: string } = {}) => {
+      const previous = stateRef.current;
+      const next = fn(previous);
+      if (next === previous) return;
+      history.current.record(previous, {
+        gesture: options.gesture ?? inputGesture(),
+        held: pointerHeld(),
+      });
+      stateRef.current = next;
+      setProject(next);
+    },
+    [],
+  );
   const setting = <K extends keyof Settings>(key: K, value: Settings[K]) =>
     edit((p) => ({ ...p, settings: { ...p.settings, [key]: value } }));
   const undo = useCallback(() => {
-    const previous = history.current.pop();
+    const previous = history.current.undo(stateRef.current);
     if (previous) {
-      future.current.push(stateRef.current);
       stateRef.current = previous;
       setProject(previous);
     }
   }, []);
   const redo = useCallback(() => {
-    const next = future.current.pop();
+    const next = history.current.redo(stateRef.current);
     if (next) {
-      history.current.push(stateRef.current);
       stateRef.current = next;
       setProject(next);
     }
@@ -334,8 +345,7 @@ export default function App() {
   }, []);
   const openProject = (p: Project) => {
     setPlaying(false);
-    history.current = [];
-    future.current = [];
+    history.current.clear();
     setSelected(null);
     setProject(p);
     seekTo(p.trimStart);
@@ -629,6 +639,22 @@ export default function App() {
         setSelected(null);
         return;
       }
+      // Undo and redo also work right after dragging a slider, while it still
+      // has focus; text fields keep their own typing undo.
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        e.key.toLowerCase() === "z" &&
+        !modal &&
+        !recording &&
+        !(e.target as HTMLElement).closest(
+          'textarea,[contenteditable="true"],input:not([type="range"]):not([type="color"])',
+        )
+      ) {
+        e.preventDefault();
+        if (e.shiftKey) redo();
+        else undo();
+        return;
+      }
       if (
         (e.target as HTMLElement).closest(
           'input,textarea,select,[contenteditable="true"]',
@@ -646,10 +672,6 @@ export default function App() {
         e.preventDefault();
         setModal("export");
         void runExportRef.current();
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
-        e.preventDefault();
-        e.shiftKey ? redo() : undo();
       }
       if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
         e.preventDefault();
@@ -1192,14 +1214,14 @@ export default function App() {
             <div className="editor-tools">
               <IconButton
                 label="Undo (Ctrl+Z)"
-                disabled={!history.current.length}
+                disabled={!history.current.past.length}
                 onClick={undo}
               >
                 <Undo2 size={16} />
               </IconButton>
               <IconButton
                 label="Redo (Ctrl+Shift+Z)"
-                disabled={!future.current.length}
+                disabled={!history.current.future.length}
                 onClick={redo}
               >
                 <Redo2 size={16} />
