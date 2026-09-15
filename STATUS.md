@@ -39,7 +39,12 @@ What changed since 0.3.0, in Dan's words from the first hand test:
 
 ### Heads-up: three things the run could not close
 
-1. **Sound measured ~57 ms late today.** The helper's own sync test (`tests/a4-av-sync.mjs`) measured 75, 51, 53, 58, 47 ms, and A4's single-flash check measured 66 then 58 ms (limit 20). Yesterday the same test measured −5 ms. **Nothing in this run touched capture:** that test runs the unchanged helper directly with its own fixture. Premiere Pro, Discord, Chrome and Spotify were open at the time. No offset was added (as the plan requires). Check it in the hand test below (step 13); a follow-up task is queued to investigate.
+1. **Sound measures ~60 ms late on the office PC; this is not a regression from yesterday.**
+   - **Today's numbers:** the helper's own sync test (`tests/a4-av-sync.mjs`) measured 57 ms this morning, then 59, 67 and 63 ms in the afternoon. A4's single-flash check measured 66 then 58 ms (limit 20).
+   - **"−5 ms yesterday" was a different PC.** Git history shows those commits were pulled onto this PC this morning. This PC measured +49 ms on 9/14 too.
+   - **Ruled out:** the helper build (a rebuild from `e33c17b` measured 51 ms), Spotify and Discord (closed: no change), the encoder, MP4 file and FFmpeg version (a flash and beep written at the same moment measure −4 ms, the same as the source clip), and Equalizer APO (0 ms delay).
+   - **Where the delay comes from:** before encoding, either in how this PC plays the test clip (Realtek speakers and their effects, or Chromium's own sync) or in the timestamps the helper gives sound packets and frames.
+   - No offset was added. Evidence: VALIDATION.md, "A/V sync follow-up".
 2. **A3 export speed is load-sensitive.** Every A3 run passed on correctness (exact frames, audio, pitch, cancel). The 60 s export beat its 30 s budget in five runs (20.5–25.9 s) and missed it in others (30–40 s) while Codex and Premiere were loading the PC. A side-by-side of old and new code showed the same spread (23–49 s), so it isn't a slowdown from this work.
 3. **`tests/desktop-capture.mjs` is repaired and passes again** (9/15 13:51, both the window and `--region` variants; `audio-proof` and `export-formats` pass on the files it writes). It now expects the auto-edit toast and an export streamed to `tests/.exports`, and it no longer types or clicks on the PC: the browser-capture fallback records no clicks or keys by design (the helper does that), and none at all for a window.
 4. **Bug found by that run, not fixed: exporting a browser-captured WebM shows only its first ~1 s.** Every later frame is the empty card; sound is fine. Native MP4 recordings (the normal path) are unaffected. Cause: MediaRecorder WebMs have no index and keyframes only every ~5 s, and mediabunny 1.56.2's lookup jumps straight to the one-second cluster it remembers, finds no keyframe there, and gives up instead of looking earlier. The same file remuxed with an index returns every frame. It slipped through because `export-formats` exports only 1 s of that file and `desktop-capture` checks the export's size, not its pictures.
@@ -93,7 +98,7 @@ Tell me: which zoom lead feels right, whether typing zooms are welcome, how the 
 ## Next steps (in order)
 
 1. Dan's hand test above.
-2. Follow-up queued from this run: investigate the ~57 ms A/V measurement (no offsets).
+2. A/V sync on the office PC (no offsets): next, run the sync test once with Windows output switched away from the Realtek speakers, to see whether the ~60 ms follows the audio device. Dan switches the device himself; the test needs a 2-minute break. If it doesn't follow the device, log the helper's frame and loopback timestamps in a diagnostic copy (ask before touching the helper). Worth one run on the 9/14 PC too, to confirm it still measures about 0 ms.
 3. Fix exporting browser-captured WebMs (heads-up 4), with a test that exports the whole file and checks its pictures.
 4. Tune defaults from Dan's answers (zoom lead, typing zoom).
 5. Still unverified from before: the separate 30-minute/4K soak and timed 4K60 export.
