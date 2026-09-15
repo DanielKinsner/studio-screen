@@ -102,7 +102,7 @@ Tell me: which zoom lead feels right, whether typing zooms are welcome, how the 
 ## Next steps (in order)
 
 1. Dan's hand test above.
-2. Pack **0.4.1** once the export-stall fix is on main (`npm install` first so the patched library is bundled), then Dan re-records the YouTube sync clip with it: beep spacing should read 1.000000 s and the export should play smoothly. Then rerun `a4-av-sync` and `a4-native-capture` at the next idle break.
+2. **Dan re-tests on 0.4.1:** record the YouTube sync clip with `release\Studio Screen 0.4.1.exe` and export it. Offline checks: beep spacing should read 1.000000 s (was 0.99944), `node tests/native-export-frames.mjs --recording "<take>ecording.mp4"` should report 0 mistimed frames, and the export should play smoothly in Premiere. Then rerun `a4-av-sync` and `a4-native-capture` at the next idle break.
 3. Tune defaults from Dan's answers (zoom lead, typing zoom).
 4. Still unverified from before: the separate 30-minute/4K soak and timed 4K60 export.
 5. Report the mediabunny index bug upstream (Dan decides; `npx patch-package mediabunny --create-issue` drafts it). When a fixed mediabunny ships, upgrade and delete the patch; `native-export-frames` confirms it.
