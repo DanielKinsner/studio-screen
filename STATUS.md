@@ -1,6 +1,6 @@
 # Status — Studio Screen
 
-**Last updated:** 2026-09-15 (0.4.0 built with every hand-test fix; ready for Dan's hand test; `desktop-capture` repaired)
+**Last updated:** 2026-09-15 evening (0.4.1 packed: helper audio-drift fix + export keyframe patch; ready for Dan's re-test)
 
 ## Where things stand
 
@@ -41,7 +41,7 @@ What changed since 0.3.0, in Dan's words from the first hand test:
 
 ### Heads-up: what the run could not close, and fixes since
 
-1. **Audio drifted early in every helper recording; fixed in the helper (needs a repack).** Dan's 9/15 hand test: beeps in the YouTube sync clip came out 0.99944 s apart in Studio Screen takes but exactly 1.000000 s in NVIDIA recordings of the same clip, so sound ran about **34 ms/min fast** against the picture (⅙ s off after 5 minutes). Cause: the helper trimmed a sample whenever a loopback packet's timestamp jittered a few microseconds early but only padded when one was ≥ 21 µs late, bleeding 12–27 samples a second and clicking both ways. `audio_timeline::align` now treats packets within 2 ms of the expected time as contiguous; real gaps and pause overlaps are still corrected. Pinned by four Rust unit tests and `tests/audio-clock.mjs` (real device, silent, no idle needed). **Not yet in any packaged exe**; the 0.4.1 pack is queued after the export fix below. The separate ~60–85 ms "sound after picture" seen with the sync clip is the clip/Chrome playback on this PC (NVIDIA shows the same), not the recorder; details in VALIDATION.md.
+1. **Audio drifted early in every helper recording; fixed in the helper and packed in 0.4.1.** Dan's 9/15 hand test: beeps in the YouTube sync clip came out 0.99944 s apart in Studio Screen takes but exactly 1.000000 s in NVIDIA recordings of the same clip, so sound ran about **34 ms/min fast** against the picture (⅙ s off after 5 minutes). Cause: the helper trimmed a sample whenever a loopback packet's timestamp jittered a few microseconds early but only padded when one was ≥ 21 µs late, bleeding 12–27 samples a second and clicking both ways. `audio_timeline::align` now treats packets within 2 ms of the expected time as contiguous; real gaps and pause overlaps are still corrected. Pinned by four Rust unit tests and `tests/audio-clock.mjs` (real device, silent, no idle needed). Packed in `release\Studio Screen 0.4.1.exe` (with the export fix below); end-to-end confirmation is Dan's re-record. The separate ~60–85 ms "sound after picture" seen with the sync clip is the clip/Chrome playback on this PC (NVIDIA shows the same), not the recorder; details in VALIDATION.md.
 2. **A3 export speed is load-sensitive.** Every A3 run passed on correctness (exact frames, audio, pitch, cancel). The 60 s export beat its 30 s budget in five runs (20.5–25.9 s) and missed it in others (30–40 s) while Codex and Premiere were loading the PC. A side-by-side of old and new code showed the same spread (23–49 s), so it isn't a slowdown from this work.
 3. **`tests/desktop-capture.mjs` is repaired and passes again** (9/15 13:51, both the window and `--region` variants; `audio-proof` and `export-formats` pass on the files it writes). It now expects the auto-edit toast and an export streamed to `tests/.exports`, and it no longer types or clicks on the PC: the browser-capture fallback records no clicks or keys by design (the helper does that), and none at all for a window.
 4. **Fixed: exporting a browser recording with sound showed only its first ~1 s** (then the empty card). Found by that run; native MP4 recordings were never affected. Cause: those WebMs have no index, keyframes seconds apart and a new cluster every second, and mediabunny 1.56.2's lookup by time gives up when a frame's keyframe is in an earlier cluster. The exporter now reads WebM frames in order instead (MP4 keeps the fast lookup). Pinned by `tests/webm-export.mjs`, which fails on the old code. Browser recordings without sound were never affected (their clusters start at keyframes).
@@ -53,9 +53,9 @@ What changed since 0.3.0, in Dan's words from the first hand test:
    - **Pinned by** `tests/native-export-frames.mjs`: it builds a clip with the helper's exact layout and a frame-number barcode in every frame, and checks that every exported frame shows the right source frame. It fails on the old reader (252, 126 and 246 wrong frames) and passes with the fix (0 of 1,050). `node tests/native-export-frames.mjs --recording "<take>\recording.mp4"` checks a real take against FFprobe.
    - **Before a hand re-test:** run `npm install` so the patch is applied, then rebuild the portable. A pack without the patch still stalls.
 
-## Dan's hand test for 0.4.0
+## Dan's hand test for 0.4.1
 
-Run `release\Studio Screen 0.4.0.exe` on the office PC (on another PC: `npm run desktop:pack` first). It opens your existing library; older projects load fine. For the sync check in step 13, close Premiere, Discord and Spotify first.
+Run `release\Studio Screen 0.4.1.exe` on the office PC (0.4.0 has the audio drift and the export stall; don't use it) (on another PC: `npm run desktop:pack` first). It opens your existing library; older projects load fine. For the sync check in step 13, close Premiere, Discord and Spotify first.
 
 1. **Record a take.** New recording → your main display → Start. During the take:
    - Click something top-left, then something bottom-right within a second.
