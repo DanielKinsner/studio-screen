@@ -4,7 +4,7 @@ Updated 2026-09-15 after the 0.4.0 hand-test fix run on Daniel Kinsner's office 
 
 ## Resume here
 
-**Version 0.4.1** (0.4.0 plus the helper audio-drift fix and the mediabunny keyframe patch; `npm install` applies the patch). 115 JavaScript unit tests in 16 files pass, plus the production build, browser smoke, A1 playback, the new browser tests (`editor-interactions`, `scrub-frames`, `3d-fit`, `timeline-resize`, `cutting`, `focus-dot`), the new desktop tests (`export-location`, `alt-tilt`), A2, A5 and the packaged smoke test on the 0.4.0 portable. A3's correctness passes on every run; its 30 s speed budget is load-sensitive on a busy PC.
+**Version 0.4.2** (0.4.0 plus the helper audio-drift fix, the mediabunny keyframe patch applied by `npm install`, and the helper's video slots filled by capture timestamp). 115 JavaScript unit tests in 16 files pass, plus the production build, browser smoke, A1 playback, the new browser tests (`editor-interactions`, `scrub-frames`, `3d-fit`, `timeline-resize`, `cutting`, `focus-dot`), the new desktop tests (`export-location`, `alt-tilt`), A2, A5 and the packaged smoke test on the 0.4.0 portable. A3's correctness passes on every run; its 30 s speed budget is load-sensitive on a busy PC.
 
 **Next is Dan's hand test of 0.4.0 (steps in STATUS.md).** The portable EXE exists only on the office PC; on another machine rebuild it with `npm run desktop:pack`. Open items: the capture helper's own sync test measures sound ~50–67 ms late on the office PC (the −5 ms pass on 2026-09-14 came from a different PC; the encoder, FFmpeg and helper build are ruled out; do not add an offset — see VALIDATION.md "A/V sync follow-up"). Exporting a browser recording with sound used to show only its first second; that is fixed and pinned by `tests/webm-export.mjs` (STATUS.md heads-up 4). Exports of normal desktop recordings stalled and ran up to 0.2 s behind in 0.4.0; that is fixed by a mediabunny patch that `npm install` applies, and pinned by `tests/native-export-frames.mjs` (STATUS.md heads-up 5). Rebuild the portable after `npm install`. The separate 30-minute/4K soak and timed 4K60 export remain unverified. Do not treat this machine's measurements as destination-hardware proof.
 
@@ -54,7 +54,7 @@ $env:ELECTRON_BUILDER_COMPRESSION_LEVEL = '3'
 npm run desktop:pack -- --config.electronDist=node_modules/electron/dist
 ```
 
-The current package version is **0.4.1**; the app's footer reads it from `package.json` at build time. The office PC's `release/Studio Screen 0.4.1.exe` is 103,248,648 bytes, SHA-256 `7E5BCBA0A769CFAC2E0232DAA65058ADBCF14EF53289FF0A75ABE9C7ADE1F012` (default compression; the 130 MB 0.4.0 used level 3). Check it with `node tests/packaged-smoke.mjs --portable` (uses a throwaway profile). Do not identify an old executable solely by its filename; source and the current status document take precedence over old artifact receipts.
+The current package version is **0.4.2**; the app's footer reads it from `package.json` at build time. The office PC's `release/Studio Screen 0.4.2.exe` is 103,250,845 bytes, SHA-256 `4292B8F40722DDE9CA4AD88D210C6D1AC8B9FCD04FF38D92431BBDEDE89B41B7` (default compression; the 130 MB 0.4.0 used level 3). Check it with `node tests/packaged-smoke.mjs --portable` (uses a throwaway profile). Do not identify an old executable solely by its filename; source and the current status document take precedence over old artifact receipts.
 
 ## What Git does not transfer
 

@@ -1,6 +1,6 @@
 # Status — Studio Screen
 
-**Last updated:** 2026-09-15 evening (0.4.1 packed: helper audio-drift fix + export keyframe patch; ready for Dan's re-test)
+**Last updated:** 2026-09-15 night (0.4.2 packed: video slots filled by capture timestamp, on top of 0.4.1's audio-drift fix and export keyframe patch; ready for Dan's simultaneous NVIDIA comparison)
 
 ## Where things stand
 
@@ -41,6 +41,7 @@ What changed since 0.3.0, in Dan's words from the first hand test:
 
 ### Heads-up: what the run could not close, and fixes since
 
+0. **Recorded frames stuttered (1,3,1,3 on 30 fps content); rebuilt in 0.4.2.** Dan's 0.4.1 re-test: drift was gone (beeps exactly 1.000000 s apart, export faithful to the take), but the raw take itself held frames unevenly, 39% of 30 fps steps being 1 or 3 frames instead of 2, and the 0.4.0 takes ranged from clean to mixed. Cause: the helper wrote "the newest picture" at each 1/60 s deadline judged by delivery time, while Windows stamps each frame with its screen refresh and delivers it a varying few ms later; refreshes near a slot boundary were coin flips, and since both clocks run at the same rate the phase stuck for a whole take. Now frames queue with their stamps, `video_timeline::Slotter` puts each in the slot its stamp falls in, and t = 0 is aligned half a slot before a refresh so stamps sit mid-slot (a trace shows them at exactly phase 0.5 on a 16.7 ms grid, delivered 7–13 ms before their stamp). Pinned by 7 Rust unit tests (one reproduces the old flip) and the new idle-gated `tests/a4-cadence.mjs`. **What it can't fix:** Chromium itself skips presenting some refreshes (the fixture skipped 48 in 8 s; YouTube in Chrome ~13%, and NVIDIA's recording shows the same), so a recording is only as even as the screen was. A/V timing is unchanged by the rebuild (`a4-av-sync` 69 ms before and after, the Chrome-playback offset on this PC).
 1. **Audio drifted early in every helper recording; fixed in the helper and packed in 0.4.1.** Dan's 9/15 hand test: beeps in the YouTube sync clip came out 0.99944 s apart in Studio Screen takes but exactly 1.000000 s in NVIDIA recordings of the same clip, so sound ran about **34 ms/min fast** against the picture (⅙ s off after 5 minutes). Cause: the helper trimmed a sample whenever a loopback packet's timestamp jittered a few microseconds early but only padded when one was ≥ 21 µs late, bleeding 12–27 samples a second and clicking both ways. `audio_timeline::align` now treats packets within 2 ms of the expected time as contiguous; real gaps and pause overlaps are still corrected. Pinned by four Rust unit tests and `tests/audio-clock.mjs` (real device, silent, no idle needed). Packed in `release\Studio Screen 0.4.1.exe` (with the export fix below); end-to-end confirmation is Dan's re-record. The separate ~60–85 ms "sound after picture" seen with the sync clip is the clip/Chrome playback on this PC (NVIDIA shows the same), not the recorder; details in VALIDATION.md.
 2. **A3 export speed is load-sensitive.** Every A3 run passed on correctness (exact frames, audio, pitch, cancel). The 60 s export beat its 30 s budget in five runs (20.5–25.9 s) and missed it in others (30–40 s) while Codex and Premiere were loading the PC. A side-by-side of old and new code showed the same spread (23–49 s), so it isn't a slowdown from this work.
 3. **`tests/desktop-capture.mjs` is repaired and passes again** (9/15 13:51, both the window and `--region` variants; `audio-proof` and `export-formats` pass on the files it writes). It now expects the auto-edit toast and an export streamed to `tests/.exports`, and it no longer types or clicks on the PC: the browser-capture fallback records no clicks or keys by design (the helper does that), and none at all for a window.
@@ -53,9 +54,9 @@ What changed since 0.3.0, in Dan's words from the first hand test:
    - **Pinned by** `tests/native-export-frames.mjs`: it builds a clip with the helper's exact layout and a frame-number barcode in every frame, and checks that every exported frame shows the right source frame. It fails on the old reader (252, 126 and 246 wrong frames) and passes with the fix (0 of 1,050). `node tests/native-export-frames.mjs --recording "<take>\recording.mp4"` checks a real take against FFprobe.
    - **Before a hand re-test:** run `npm install` so the patch is applied, then rebuild the portable. A pack without the patch still stalls.
 
-## Dan's hand test for 0.4.1
+## Dan's hand test for 0.4.2
 
-Run `release\Studio Screen 0.4.1.exe` on the office PC (0.4.0 has the audio drift and the export stall; don't use it) (on another PC: `npm run desktop:pack` first). It opens your existing library; older projects load fine. For the sync check in step 13, close Premiere, Discord and Spotify first.
+Run `release\Studio Screen 0.4.2.exe` on the office PC (0.4.0 drifts and stalls, 0.4.1 stutters on smooth motion; don't use them) (on another PC: `npm run desktop:pack` first). It opens your existing library; older projects load fine. For the sync check in step 13, close Premiere, Discord and Spotify first.
 
 1. **Record a take.** New recording → your main display → Start. During the take:
    - Click something top-left, then something bottom-right within a second.
@@ -102,7 +103,7 @@ Tell me: which zoom lead feels right, whether typing zooms are welcome, how the 
 ## Next steps (in order)
 
 1. Dan's hand test above.
-2. **Dan re-tests on 0.4.1:** record the YouTube sync clip with `release\Studio Screen 0.4.1.exe` and export it. Offline checks: beep spacing should read 1.000000 s (was 0.99944), `node tests/native-export-frames.mjs --recording "<take>ecording.mp4"` should report 0 mistimed frames, and the export should play smoothly in Premiere. Then rerun `a4-av-sync` and `a4-native-capture` at the next idle break.
+2. **Dan's simultaneous comparison on 0.4.2:** start a Studio Screen recording of the main display, play the YouTube sync clip fullscreen in Chrome, press Alt+F9 to start NVIDIA mid-play, wait ~15 s, Alt+F9 to stop, then stop Studio Screen. Same playback, both recorders: cadence and audio offset are then compared like for like (beep spacing 1.000000 s, `node tests/native-export-frames.mjs --recording "<take>ecording.mp4"` 0 mistimed frames, export smooth in Premiere). At the next 2-minute idle break: `a4-cadence` (not yet run green under its final rule; its last run measured 40 odd steps against 48 skipped refreshes), `a4-native-capture`, `a4-av-sync`.
 3. Tune defaults from Dan's answers (zoom lead, typing zoom).
 4. Still unverified from before: the separate 30-minute/4K soak and timed 4K60 export.
 5. Report the mediabunny index bug upstream (Dan decides; `npx patch-package mediabunny --create-issue` drafts it). When a fixed mediabunny ships, upgrade and delete the patch; `native-export-frames` confirms it.
