@@ -1,6 +1,6 @@
 # Status — Studio Screen
 
-**Last updated:** 2026-09-14 (native suite passed; five-minute soak awaiting uninterrupted idle)
+**Last updated:** 2026-09-14 (verification complete; paused for hand test / machine transfer)
 
 ## Where things stand
 
@@ -12,23 +12,23 @@ Option A is built and pushed: a readability pass, then phases A1 (smooth camera 
 | A1 camera & cursor | Unit tests; 60 fps preview on a 10-min 3D project; playback test | Which camera feel Dan likes |
 | A2 recording UI | Native test passed: protected marker 0 pixels, control 1,071; countdown, hidden editor and restored focus | Dan's hand test |
 | A3 export | Latest browser 60 s 1080p60 in 28.1 s; minimized desktop 30.5 s; exact frames, pitch and cancellation passed | 4K60 export speed; launching the packaged app |
-| A4 capture helper | Full native suite passed at 150% scaling: 1.26 px clicks, full input events, −7 ms A/V; six-flash sync mean −5 ms; helper/app crash recovery passed (472 ms helper exit) | Five-minute soak awaiting uninterrupted idle; separate 30-minute/4K soak; Dan's hand test |
+| A4 capture helper | Full native suite passed at 150% scaling: 1.26 px clicks, full input events, −7 ms A/V; six-flash sync mean −5 ms; helper/app crash recovery passed (472 ms helper exit); five-minute 1440p60 soak passed (106–107 MB) | Separate 30-minute/4K soak; Dan's hand test |
 | A5 auto-edit | Five-minute synthetic take: auto-edit 357 ms, first frame 737 ms, saved 1,552 ms; test passed after fixing its autosave race | Dan's hand test |
 
 ### Current verification: sync and native end-to-end passed
 
 Setup, five native capability checks, 65 JavaScript tests, production build, browser smoke, A3, native A2 and A5 passed. After filling short PCM gaps in the helper, the plain six-flash sync test passed: **−13, +8, +1, −12, −8 ms; mean −5 ms**. The −49 ms negative control measured **−51 ms mean** and failed. The app correctly retains zero offset; the original +49 ms calibration does not apply here.
 
-The native end-to-end suite now passes on the 150% secondary display: **1.26 px** click error, full input events, **−7 ms** sync, zero cursor pixels versus 234 in the control, and both crash-recovery assertions. The test injector needed per-monitor thread DPI awareness. A2 rerun passed (0 protected marker pixels; 1,071 control); A5 rerun passed (357 ms auto-edit, 737 ms first frame, 1,552 ms saved). The five-minute soak has been interrupted by input and remains queued. See [VALIDATION.md](VALIDATION.md).
+The native end-to-end suite now passes on the 150% secondary display: **1.26 px** click error, full input events, **−7 ms** sync, zero cursor pixels versus 234 in the control, and both crash-recovery assertions. The test injector needed per-monitor thread DPI awareness. A2 rerun passed (0 protected marker pixels; 1,071 control); A5 rerun passed (357 ms auto-edit, 737 ms first frame, 1,552 ms saved). The final five-minute soak passed: 308.165 s, 18,490 frames, 2560×1440 at 60 fps, 106–107 MB settled memory. The retry queue has exited. See [VALIDATION.md](VALIDATION.md).
 
 ## Next steps (in order)
 
-**Dan authorized continuing verification.** Screen recordings are deleted after measurement. No `--force`; capture and input tests wait for idle. Soak attempts stopped on resumed input at 247.8 s, 187.4 s and 184.4 s, with settled-memory spreads of 2, 3 and 1 MB respectively. None is a completed five-minute pass.
+**Safe stopping point:** all requested automated checks are complete. No background capture queue remains. Real-screen videos were deleted after measurement; the final soak video/event log were confirmed absent. Earlier interrupted attempts are historical evidence, not failures of the completed soak.
 
-1. Finish the uninterrupted five-minute soak and record its actual duration, resolution and memory measurements.
-2. Stop for Dan's hand test before new features. The separate 30-minute/4K soak remains unverified; this PC currently records 2560×1440.
-3. Dan's hand test (below). Tune camera feel from his notes.
-4. Bump `package.json` to 0.3.0 before the next portable build (the new build currently overwrote `release/Studio Screen 0.2.1.exe`).
+1. On the other PC, follow [docs/MACHINE-HANDOFF.md](docs/MACHINE-HANDOFF.md): pull main, install dependencies, rebuild the native helper and inspect every capability check. Generated binaries/profiles do not transfer through Git.
+2. Perform Dan's hand test below before any new features. The current app uses zero audio offset; do not apply the old −49 ms calibration. Destination hardware needs its own verification.
+3. The separate 30-minute/4K soak, 4K60 export speed and current packaged-app launch remain unverified; they were outside the completed five-minute verification request.
+4. Before the next portable build, bump the package version from 0.2.1 as previously planned. No new package was built for this handoff.
 
 ## Dan's hand test (everything at once)
 

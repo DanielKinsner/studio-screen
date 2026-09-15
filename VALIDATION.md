@@ -110,6 +110,13 @@ Camera and microphone recording are intentionally excluded. The sample project i
 - Final A2 repeat passed: 11 samples per take, **0 protected magenta pixels**, **0 black share**, **1,071 control magenta pixels**; countdown, hidden editor, focused return and no leftover windows passed. Final A5 repeat passed: **357 ms auto-edit**, **737 ms first frame**, **1,552 ms saved**, 300 s / 60,228 points / 10 speeds / auto=true; no page errors.
 - After harness cleanup, `npm test` passed **65/65 across 12 files**. Real-screen recordings from native and A2 were deleted by their test cleanup. A five-minute soak attempt stopped on renewed input at 187.449 s / 11,247 frames (2560×1440 at 60 fps); settled memory 108–111 MB. This interrupted attempt is not a pass. Its media and event log were independently confirmed absent. A new attempt is queued behind the idle guard.
 
+### Final completed soak and transfer checkpoint
+
+- The queued run completed without interruption: **308.165 s**, **18,490 frames**, **2560×1440 at 60 fps**; audio duration 308.195 s. **20 memory samples**, settled **106–107 MB** (**1 MB spread**), output 67 MB before deletion. The script printed `PASS: 5 min 2560×1440 at 60 fps with flat memory (1 MB spread).` and exited 0. Receipt: `tests/a4-soak-results.json` (local generated evidence).
+- Confirmed `tests/.native/soak.mp4` and `soak.jsonl` absent after cleanup. A2 project folders contain metadata only, no recorded videos. Retry queue exited; the task's dev server was stopped for handoff.
+- All requested automated verification is complete. The −49 ms calibration run failed and was not applied; the corrected helper passes with zero offset. The separate 30-minute/4K soak and destination-PC hand test are not claimed as verified.
+- Local-only temporary geometry probe and browser profiles remain untracked because automatic approval review rejected their cleanup. They are not needed to build or continue on another PC and are not uploaded.
+
 ### Earlier evidence (original PC)
 
 - `npm run native:check` on the RTX 4080 PC: capture, borderless (access status 4), dirty regions, hardware H.264, loopback audio all available.

@@ -1,6 +1,12 @@
 # Move Studio Screen to another Windows machine
 
-Handoff prepared 2026-09-14. The other agent's complete Option A work is included through `408cb02` (the paused checkpoint), including the late system-audio fix `701902a`. This handoff adds documentation only; it does not resume feature work or apply audio calibration.
+Updated after completing the requested automated verification on Daniel Kinsner's checkout. All implementation and test fixes are on `main`, including short PCM-gap preservation before AAC encoding and mixed-DPI test input. Read [STATUS.md](../STATUS.md) first for the current stopping point, then [VALIDATION.md](../VALIDATION.md) for measured evidence. No new feature work or fixed audio calibration is pending in a private branch.
+
+## Resume here
+
+The requested automated checks passed: 65 JavaScript tests, two Rust timeline tests and the real AAC encoder regression, production build, browser smoke, A3 export, native capture/input/crash recovery, A2, A5, and the five-minute soak. Latest soak: **308.165 s at 2560×1440/60 fps, 106–107 MB settled memory**. The task's retry queue has exited and development server has been stopped.
+
+**Next is Dan's hand test after rebuilding on the destination PC. Stop before new features.** Zero audio offset passed here (six-flash mean −5 ms); −49 ms measured −51 ms and failed, so no fixed offset was added. The separate 30-minute/4K soak, 4K60 export speed and current packaged-app launch remain unverified. Do not treat this machine's measurements as destination-hardware proof.
 
 ## Get the complete source
 
@@ -68,9 +74,7 @@ On the audited machine, the standard Videos path is `C:\Users\SM - Dan\Videos`; 
 
 Read `STATUS.md` first, then `docs/SPEC.md`, `docs/PLAN.md`, and the later sections of `VALIDATION.md`. Older validation sections describe earlier versions, not the current implementation.
 
-The handoff audit passed 61 unit tests, the TypeScript/Vite production build, and `cargo check --locked --manifest-path native/studio-capture/Cargo.toml`. Vite reports a large-bundle warning. These checks do not complete the pending native tests.
-
-Still pending at the checkpoint: the clean native end-to-end tests, 30-minute soak, open-speed test, latest packaged-app launch, and A/V sync calibration. The approximately -49 ms audio correction was measured on the original PC and is not wired into the app. **Do not copy that calibration to a different PC without measuring it there.** The late-audio fix needs a clean sync recheck as noted in `STATUS.md`.
+The current evidence is summarized at the top of this guide and in STATUS.md. Earlier 61-test and pending-native notes in historical documents have been superseded by 65 JavaScript tests and the completed native verification. Vite's existing large-bundle warning remains.
 
 Browser tests use installed Microsoft Edge. Some media tests also need FFmpeg and ffprobe; configure your installation instead of relying on this PC's AutoPod path:
 
@@ -83,7 +87,7 @@ Native recording tests move the pointer and send controlled keys. Run them only 
 
 ## Offline source fallback
 
-An optional `studio-screen-main.bundle` is prepared locally under `release/` after the handoff push. It contains the committed main history and this guide, but not dependencies, generated builds, recordings, or app profiles. Copy it to the other machine, then:
+An older optional `studio-screen-main.bundle` may exist locally under `release/`; it is not refreshed by this handoff and may omit the latest fixes. Prefer cloning/pulling GitHub main. If using an older bundle, fetch and fast-forward main before building. It contains the committed main history and this guide, but not dependencies, generated builds, recordings, or app profiles. Copy it to the other machine, then:
 
 ```powershell
 git clone -b main .\studio-screen-main.bundle studio-screen
