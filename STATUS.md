@@ -1,6 +1,6 @@
 # Status — Studio Screen
 
-**Last updated:** 2026-09-14 (verification resumed; native sync under diagnosis)
+**Last updated:** 2026-09-14 (native suite passed; five-minute soak awaiting uninterrupted idle)
 
 ## Where things stand
 
@@ -10,23 +10,23 @@ Option A is built and pushed: a readability pass, then phases A1 (smooth camera 
 |---|---|---|
 | Readability | Screenshots at 4K/150% and laptop size; browser tests | Dan's eyes |
 | A1 camera & cursor | Unit tests; 60 fps preview on a 10-min 3D project; playback test | Which camera feel Dan likes |
-| A2 recording UI | Native test passed: protected marker 0 pixels, control 1,045; countdown, hidden editor and restored focus | Dan's hand test |
+| A2 recording UI | Native test passed: protected marker 0 pixels, control 1,071; countdown, hidden editor and restored focus | Dan's hand test |
 | A3 export | Latest browser 60 s 1080p60 in 28.1 s; minimized desktop 30.5 s; exact frames, pitch and cancellation passed | 4K60 export speed; launching the packaged app |
-| A4 capture helper | Capability check; smoke take; click accuracy 0.5 px; clicks, right-click, wheel, shortcut, typing, cursor shapes; take survives helper kill; helper stops 0.4 s after app kill; recovery | A clean full pass of the end-to-end test; the 30-minute memory soak; **A/V sync correction not applied (see below)** |
-| A5 auto-edit | Five-minute synthetic take: auto-edit 288 ms, first frame 635 ms, saved 1,439 ms; test passed after fixing its autosave race | Dan's hand test |
+| A4 capture helper | Full native suite passed at 150% scaling: 1.26 px clicks, full input events, −7 ms A/V; six-flash sync mean −5 ms; helper/app crash recovery passed (472 ms helper exit) | Five-minute soak awaiting uninterrupted idle; separate 30-minute/4K soak; Dan's hand test |
+| A5 auto-edit | Five-minute synthetic take: auto-edit 357 ms, first frame 737 ms, saved 1,552 ms; test passed after fixing its autosave race | Dan's hand test |
 
-### Known issue: native audio/video timing
+### Current verification: sync and native end-to-end passed
 
-**Latest re-check on this checkout:** setup, all five native capability checks, 63 unit tests, production build, browser smoke, A3, native A2 and A5 passed. Correcting fixture placement/crop and audio timestamp handling produced six flashes and six tones. Sync measured **−52 ms uncalibrated** and **−92 ms with −49 ms configured**: audio leads here, so the proposed −49 ms default is not applied. The native end-to-end run measured 0.51 px click error and successful recovery behavior but failed its sync assertion. See [VALIDATION.md](VALIDATION.md) for exact results and test limitations.
+Setup, five native capability checks, 65 JavaScript tests, production build, browser smoke, A3, native A2 and A5 passed. After filling short PCM gaps in the helper, the plain six-flash sync test passed: **−13, +8, +1, −12, −8 ms; mean −5 ms**. The −49 ms negative control measured **−51 ms mean** and failed. The app correctly retains zero offset; the original +49 ms calibration does not apply here.
 
-The earlier ~49 ms audio delay was measured on the original PC. Current diagnosis found that the helper leaves audio gaps of 20 ms or less unfilled; a synthetic test through the real AAC encoder reproduced a 1.000 s tone moving to 0.920 s after eight missing 10 ms packets. Explicit gap filling restored 1.000 s. The helper fix passes the synthetic encoder regression and two Rust timeline tests; native remeasurement is pending an idle PC. No fixed offset should be inferred from the earlier results.
+The native end-to-end suite now passes on the 150% secondary display: **1.26 px** click error, full input events, **−7 ms** sync, zero cursor pixels versus 234 in the control, and both crash-recovery assertions. The test injector needed per-monitor thread DPI awareness. A2 rerun passed (0 protected marker pixels; 1,071 control); A5 rerun passed (357 ms auto-edit, 737 ms first frame, 1,552 ms saved). The five-minute soak has been interrupted by input and remains queued. See [VALIDATION.md](VALIDATION.md).
 
 ## Next steps (in order)
 
-**Dan authorized continuing verification.** Screen recordings are deleted after measurement. No `--force`; capture and input tests wait for idle. The first soak stopped on resumed input after 247.8 s, with a 2 MB settled-memory spread; it is not a completed five-minute pass.
+**Dan authorized continuing verification.** Screen recordings are deleted after measurement. No `--force`; capture and input tests wait for idle. Soak attempts stopped on resumed input at 247.8 s, 187.4 s and 184.4 s, with settled-memory spreads of 2, 3 and 1 MB respectively. None is a completed five-minute pass.
 
-1. With the PC idle, remeasure sync after the audio-gap fix, then rerun `node tests/a4-native-capture.mjs`. Only consider the original −49 ms app correction if the uncalibrated delay is again about +49 ms and the calibrated mean is within ±20 ms; current measurements do not satisfy that gate.
-2. Complete `node tests/a4-soak.mjs --minutes 5` during uninterrupted idle time. The separate 30-minute/4K soak remains unverified; this PC currently records 2560×1440. A2 and A5 passed; rerun if subsequent changes affect them. Record results in VALIDATION.md.
+1. Finish the uninterrupted five-minute soak and record its actual duration, resolution and memory measurements.
+2. Stop for Dan's hand test before new features. The separate 30-minute/4K soak remains unverified; this PC currently records 2560×1440.
 3. Dan's hand test (below). Tune camera feel from his notes.
 4. Bump `package.json` to 0.3.0 before the next portable build (the new build currently overwrote `release/Studio Screen 0.2.1.exe`).
 
@@ -61,7 +61,7 @@ npm run desktop:dev
    - The camera glides from the first click to the second without zooming out.
    - Typing plays at 2× and the still stretch at 4×.
    - The bar, countdown and notes are not in the video.
-   - Sound may be slightly behind the picture: that's the known issue above.
+   - Check that sound and picture stay aligned. The automated sync test now passes.
 6. **Timeline.**
    - Automatic clips are dashed. Hover one and click **×** to remove just that edit.
    - **Pacing → Back to raw** removes the whole automatic edit; **Apply automatic edit** brings it back.
