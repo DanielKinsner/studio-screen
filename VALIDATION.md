@@ -68,6 +68,17 @@ Camera and microphone recording are intentionally excluded. The sample project i
 
 ## A4 — capture helper — 2026-09-14
 
+### Latest verification run — Daniel Kinsner checkout, 2026-09-14
+
+- `CLAUDE.md` was absent from the checkout and its parent directory. Read STATUS.md, the as-built PLAN sections, this document, and docs/MACHINE-HANDOFF.md.
+- Setup: `npm install` completed; `npm run native:build` passed (release build, 37.97 s); `npm run native:check` printed five checks, all ✔, including the NVIDIA GeForce RTX 4080 hardware encoder. `npm run dev` served the editor at 127.0.0.1:5173. Tests used the installed FFmpeg 7.1.1 through `FFMPEG_PATH` / `FFPROBE_PATH`; the old AutoPod path does not exist here.
+- Baseline: `npm run test` passed **61/61 tests across 10 files**; `npm run build` passed with the existing large-chunk warning; `node tests/browser-smoke.mjs` passed editing, WebM export, persistence, mobile viewport and no page errors.
+- `node tests/a3-export.mjs` passed: browser 60 s 1080p60 export **28.1 s (2.14× real time)**, **3,600 frames**, spacing 16.666–16.667 ms, H.264/AAC, frame difference **2.19/255**. Edited export: **480 frames**, **8.000 s** audio, **439 Hz** normal / **440.7 Hz** sped-up tone. Browser cancellation returned AbortError with zero downloads. Minimized desktop export: **30.5 s**, **3,600 frames**; cancellation reduced files from two to one. The under-30-second assertion applies to the browser export. Receipt: `tests/a3-results.json`.
+- `node tests/a4-av-sync.mjs` ran after its `tests/idle.ps1` guard accepted at least 60 s idle; no `--force`. **Failed (exit 1):** captured frame size **2560×1440**, **0 flashes**, **6 tones**, **0 paired offsets**. The script's `meanMs: 0` is its empty-array fallback and is **not a valid sync measurement**. The flash-detection failure prevents confirming the prior ~49 ms delay; the underlying reason was not established. Receipt: `tests/a4-av-sync-results.json`.
+- Stopped at the requested sync gate. Did **not** run the −49 ms calibration, modify `studio:native-start`, or run a4-native-capture, a2-recording-ui, a5-open-speed or the five-minute soak. No product fix or regression test was added without a diagnosed cause. The sync test deleted `tests/.native/av-sync.mp4` and `av-sync.jsonl`; both paths were independently confirmed absent. Waiting for Dan's review/hand test before resuming.
+
+### Earlier evidence (original PC)
+
 - `npm run native:check` on the RTX 4080 PC: capture, borderless (access status 4), dirty regions, hardware H.264, loopback audio all available.
 - Helper smoke take (3 s, 4K60, with a pause): H.264 High 3840×2160 60 fps + AAC; video 2.033 s and audio 2.028 s; pointer, cursor-shape and dirty-region events logged.
 - `tests/a4-native-capture.mjs`, first clean run (PC idle): window capture 1332×950; recorded click landed **0.5 px** from the red marker; 6 left clicks (5-click burst + 1), 1 right-click, 1 wheel, "Ctrl + K", 4 typing events, cursor shapes text/pointer/arrow; killing the helper kept the take (3.91 s file, 4.01 s project); app kill recovered on relaunch. Failed assertions in that run: stray-pixel count 40 vs 308 in the cursor-baked control (the marker's anti-aliased rim; the check now excludes it), A/V offset 34 ms with a hand-timed fixture (replaced with a real synced video), and the app-kill take ran 13.8 s because orphaned Electron processes held the helper's stdin open.

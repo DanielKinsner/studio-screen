@@ -1,6 +1,6 @@
 # Status — Studio Screen
 
-**Last updated:** 2026-09-14 (paused at Dan's request)
+**Last updated:** 2026-09-14 (verification stopped at the A/V sync gate)
 
 ## Where things stand
 
@@ -17,9 +17,13 @@ Option A is built and pushed: a readability pass, then phases A1 (smooth camera 
 
 ### Known issue: sound about 49 ms behind the picture
 
+**Latest re-check on this checkout:** setup, all five native capability checks, 61 unit tests, production build, browser smoke and A3 export passed. The idle-gated uncalibrated sync test failed at 2560×1440: six tones, zero flashes, no paired offsets. Its printed mean of 0 is an empty-list fallback, not a measurement. The previous ~49 ms result therefore remains unconfirmed here. The recording and input event log were deleted and their absence verified. See the latest run in [VALIDATION.md](VALIDATION.md).
+
 On this PC, native recordings put system audio about 49 ms after the matching picture: 47–51 ms across 5 flashes in `tests/a4-av-sync.mjs`. The helper already accepts an `audioOffsetMs` setting, and one run with −49 ms averaged −1 ms. It is **not wired into the app yet**. It also needs a clean re-check after the silence-filler fix (commit 701902a), because the runs after that fix were disturbed by someone using the PC. At a 49 ms offset lip-sync issues are borderline visible; clicks and system sounds will feel slightly late.
 
 ## Next steps (in order)
+
+**Stopped for Dan:** the latest uncalibrated run could not measure sync. The calibrated run, app correction, and subsequent native/A2/A5/soak tests were not attempted. Wait for Dan's review/hand test before resuming; first resolve why the flash detector found no flashes. No new features were started.
 
 1. With the PC idle, run `node tests/a4-av-sync.mjs` then `node tests/a4-av-sync.mjs --offset-ms -49`. If the second averages within ±20 ms, have `electron/main.cjs` pass `audioOffsetMs: -49` in the helper config (`studio:native-start`), commit, and re-run.
 2. With the PC idle, run in turn: `node tests/a4-native-capture.mjs`, `node tests/a2-recording-ui.mjs`, `node tests/a5-open-speed.mjs`, then `node tests/a4-soak.mjs` (30 minutes; `--minutes 5` for a quick one). Record the results in VALIDATION.md.
