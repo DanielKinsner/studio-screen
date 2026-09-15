@@ -165,11 +165,14 @@ export async function readProject(file: File): Promise<Project> {
         )
       )
         throw new Error("Invalid focus point.");
-      z.focus = z.focus.map((f: { t: number; x: number; y: number }) => ({
-        t: f.t,
-        x: Math.max(0, Math.min(1, f.x)),
-        y: Math.max(0, Math.min(1, f.y)),
-      }));
+      z.focus = z.focus.map(
+        (f: { t: number; x: number; y: number; click?: unknown }) => ({
+          t: f.t,
+          x: Math.max(0, Math.min(1, f.x)),
+          y: Math.max(0, Math.min(1, f.y)),
+          ...(Number.isFinite(f.click) ? { click: f.click as number } : {}),
+        }),
+      );
     }
     for (const [key, min, max] of [
       ["tiltX", -40, 40],

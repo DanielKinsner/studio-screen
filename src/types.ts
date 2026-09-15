@@ -27,8 +27,11 @@ export type Zoom = {
   offsetX?: number;
   offsetY?: number;
   perspective?: number;
-  /** Click-driven focus changes inside an automatic zoom (source seconds). */
-  focus?: { t: number; x: number; y: number }[];
+  /**
+   * Click-driven focus changes inside an automatic zoom (source seconds).
+   * `click` is when the click itself happened; the camera starts at `t`.
+   */
+  focus?: { t: number; x: number; y: number; click?: number }[];
 };
 export type Caption = { id: string; start: number; end: number; text: string };
 export type Annotation = {

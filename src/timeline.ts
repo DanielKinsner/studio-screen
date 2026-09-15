@@ -184,7 +184,7 @@ const generateZooms = memo(
           scale,
           mode,
           follow: true,
-          focus: focus.map(({ t, x, y }) => ({ t, x, y })),
+          focus: focus.map(({ t, x, y, click }) => ({ t, x, y, click })),
         },
       ];
     });

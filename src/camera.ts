@@ -5,6 +5,7 @@ import {
   clampCenter,
   outputTimeAt,
   playbackSegments,
+  zoomLead,
 } from "./timeline";
 import { lastAtOrBefore, smoothPointer } from "./cursorPath";
 import { memo, springStep, type Spring } from "./spring";
@@ -54,6 +55,7 @@ function buildPath(p: Project): Path {
     reach.push(i && zooms[reach[i - 1]].end >= z.end ? reach[i - 1] : i);
   });
   const hasPointer = p.demo || p.points.length > 0;
+  const lead = zoomLead(s.cameraResponse);
 
   const activeZoom = (t: number): Zoom | undefined => {
     const i = lastAtOrBefore(starts, t);
@@ -101,7 +103,12 @@ function buildPath(p: Project): Path {
       hasPointer && z.follow !== false && (s.followCursor || is3d)
         ? smoothPointer(p, t)
         : undefined;
-    if (s.followCursor && pointer) {
+    // From a focus keyframe until its click, the camera already knows where
+    // the pointer is going: aim straight there instead of letting the pointer,
+    // which hasn't travelled yet, hold the view back.
+    const key = focus >= 0 ? z.focus![focus] : undefined;
+    const leading = !!key && t < (key.click ?? key.t + lead);
+    if (s.followCursor && pointer && !leading) {
       const half = FOLLOW_ZONE / scale;
       centerX = clamp(centerX, pointer.x - half, pointer.x + half);
       centerY = clamp(centerY, pointer.y - half, pointer.y + half);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { cameraAt, poseAt } from "./camera";
-import { clampCenter, outputTimeAt } from "./timeline";
-import { newProject, type Project, type Zoom } from "./types";
+import { autoZooms, clampCenter, outputTimeAt } from "./timeline";
+import { cameraFeel, newProject, type Project, type Zoom } from "./types";
 
 function project(zooms: Zoom[], duration = 12): Project {
   const p = newProject(false);
@@ -107,6 +107,37 @@ describe("Spring camera", () => {
     const at = cameraAt(p, 7);
     expect(0.9 - at.x).toBeLessThanOrEqual(0.3 / 2 + 0.01);
     expect(cameraAt(p, 2).x).toBeGreaterThan(0.5);
+  });
+  it("heads for the next click early even before the pointer travels there", () => {
+    const p = newProject(false);
+    p.duration = 12;
+    p.trimEnd = 12;
+    Object.assign(p.settings, {
+      motionEase: "focused",
+      cameraResponse: cameraFeel.focused.response,
+      cameraBounce: cameraFeel.focused.bounce,
+      followCursor: true,
+    });
+    // Click top-left, then bottom-right 0.6 s later; the pointer only travels
+    // in the last 0.2 s.
+    p.points = [
+      { t: 0, x: 0.1, y: 0.1 },
+      { t: 2, x: 0.1, y: 0.1, click: true },
+      { t: 2.4, x: 0.1, y: 0.1 },
+      { t: 2.6, x: 0.9, y: 0.9, click: true },
+      { t: 12, x: 0.9, y: 0.9 },
+    ];
+    const [z] = autoZooms(p);
+    expect(z.focus).toHaveLength(2);
+    const key = z.focus![1].t;
+    expect(key).toBeLessThan(2.6);
+    const scale = z.scale;
+    const from = cameraAt(p, key).x,
+      target = clampCenter(0.9, scale);
+    expect(cameraAt(p, key + 1 / 30).x).toBeGreaterThan(from + 1e-4);
+    expect(cameraAt(p, 2.6).x - from).toBeGreaterThanOrEqual(
+      0.7 * (target - from),
+    );
   });
   it("tilts a manual 3D zoom from flat to its chosen angle and back", () => {
     const p = project([

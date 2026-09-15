@@ -72,3 +72,21 @@ Commit: `7221120`.
 - `requestVideoFrameCallback` was not needed: in Edge, drawing after `seeked` already matches the exact decoded frame (test above).
 - The fixture is `tests/scrub-source.mp4` (git-ignored by `tests/*.mp4`).
 
+Commit: `4cab9ce`.
+
+## Slice 4: Predictive camera on fast clicks (R10)
+
+**Shipped:** in `buildPath` (`src/camera.ts`) the follow-cursor clamp is skipped during a focus keyframe's lead window (keyframe `t` → its `click` time; hand-placed keyframes without `click` use `t + zoomLead(response)`). Generated focus keyframes now carry optional `click` (types, `generateZooms`, and `.studio` import keeps it when finite).
+
+**Root cause:** the camera aimed at the next click early, but the follow-cursor clamp pinned the view centre within `0.3/scale` of the *current* pointer, which hadn't travelled yet, cancelling the head start.
+
+**Verification:**
+- New unit test failed first (`expected 0.30302 to be greater than 0.30312`: no movement after the keyframe).
+- After the fix, the plan's scenario (Snappy, clicks at 2.0 s top-left and 2.6 s bottom-right, pointer travels only in the last 0.2 s): second keyframe at 2.258 s; centre x 0.3030 → 0.3517 one frame (1/30 s) later → **0.6929 at 2.6 s = 99% of the way** to the clamped target 0.697 (plan requires ≥ 70%).
+- `npm test` 74 passed; `npm run build` OK; `browser-smoke`, `a1-playback` PASS.
+- `node tests/a3-export.mjs` PASS: 60 s export 25.88 s, 3600 frames, gap spread 1e-6 s, frame difference 2.19, AAC; edited 480 frames, 8 s audio, pitch 439/440.7; cancel AbortError with 0 downloads; desktop minimized 22.6 s, 3600 frames, files 2 → 1.
+
+**Deviations / judgment calls:**
+- The lead window also applies to the first keyframe of an automatic zoom (zoom start → first click), so the zoom-in aims at the first click rather than wherever the pointer is on its way there. Same rule, same intent.
+- `zoomLead(response)` is used for hand keyframes now; slice 5 adds the extra lead through the same variable.
+
