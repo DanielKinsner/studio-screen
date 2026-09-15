@@ -127,6 +127,7 @@ Every line should show ✔, and `npm install` should print `mediabunny@1.56.2 �
   - A window that's resized mid-take is padded or cropped to its starting size.
   - Displays wider than 4096 px are untested.
   - Custom app cursors draw as an arrow.
+  - `tests/a4-av-sync.mjs` fails its ±20 ms rule on the office PC by design of the PC, not the recorder: the Chromium player it uses shows sound 60–100 ms after the picture (NVIDIA's recorder measures the same on YouTube). Keep the rule; a pass there needs a like-for-like reference, not an offset.
   - Drag gestures aren't interpreted.
   - The timeline fits its whole length to the width, so closing a gap rescales the view instead of leaving room at the end.
   - Browser-capture fallback (no helper): no clicks, keys or typing, so no automatic zooms; for a window it records no pointer at all (window sources have no display to poll).
