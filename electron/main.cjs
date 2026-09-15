@@ -61,12 +61,38 @@ function writeState(patch) {
   } catch {}
 }
 
-// Finished videos stream straight to disk here (tests point it elsewhere).
+// Finished videos stream straight to disk. STUDIO_EXPORT_DIR (tests and power
+// users) always saves there with no dialog; otherwise Export asks with Save As,
+// starting in the last folder used.
 const exportsDir = () =>
   process.env.STUDIO_EXPORT_DIR
     ? path.resolve(process.env.STUDIO_EXPORT_DIR)
     : path.join(app.getPath("videos"), "Studio Screen", "Exports");
+const exportStatePath = () =>
+  path.join(app.getPath("userData"), "export-state.json");
+function lastExportDir() {
+  if (process.env.STUDIO_EXPORT_DIR) return exportsDir();
+  try {
+    const dir = JSON.parse(fs.readFileSync(exportStatePath(), "utf8")).lastDir;
+    if (
+      typeof dir === "string" &&
+      path.isAbsolute(dir) &&
+      fs.statSync(dir).isDirectory()
+    )
+      return path.resolve(dir);
+  } catch {}
+  return exportsDir();
+}
+function rememberExportDir(dir) {
+  if (process.env.STUDIO_EXPORT_DIR) return;
+  try {
+    fs.writeFileSync(exportStatePath(), JSON.stringify({ lastDir: dir }));
+  } catch {}
+}
+const formatNames = { mp4: "MP4 video", webm: "WebM video", gif: "GIF" };
 const openExports = new Map();
+// Files this session exported, which "Show in folder" may reveal.
+const exported = new Set();
 async function uniquePath(dir, name, extension) {
   const base = (
     name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "").trim() || "Studio Screen"
@@ -465,18 +491,37 @@ app.whenReady().then(() => {
       mainWindow.focus();
     }
   });
-  ipcMain.handle("studio:export-open", async (event, name, extension) => {
-    assertSender(event);
-    if (!["mp4", "webm", "gif"].includes(extension))
-      throw new Error("Unsupported export format.");
-    const dir = exportsDir();
-    await fs.promises.mkdir(dir, { recursive: true });
-    const file = await uniquePath(dir, String(name || ""), extension);
-    const handle = await fs.promises.open(file, "w");
-    const id = randomUUID();
-    openExports.set(id, { handle, file });
-    return { id, path: file };
-  });
+  ipcMain.handle(
+    "studio:export-open",
+    async (event, name, extension, options) => {
+      assertSender(event);
+      if (!["mp4", "webm", "gif"].includes(extension))
+        throw new Error("Unsupported export format.");
+      const dir = lastExportDir();
+      await fs.promises.mkdir(dir, { recursive: true }).catch(() => {});
+      const suggested = await uniquePath(dir, String(name || ""), extension);
+      let file = suggested;
+      // Ctrl+E (quick) saves next to the last export without asking.
+      if (!process.env.STUDIO_EXPORT_DIR && options?.quick !== true) {
+        const result = await dialog.showSaveDialog(mainWindow, {
+          title: "Export video",
+          defaultPath: suggested,
+          filters: [{ name: formatNames[extension], extensions: [extension] }],
+        });
+        if (result.canceled || !result.filePath) return null;
+        file = path.resolve(result.filePath);
+        if (path.extname(file).toLowerCase() !== `.${extension}`)
+          file += `.${extension}`;
+      }
+      // Render into a side file and only replace the chosen one on success,
+      // so a failed or cancelled export never destroys an existing video.
+      const partial = `${file}.partial`;
+      const handle = await fs.promises.open(partial, "w");
+      const id = randomUUID();
+      openExports.set(id, { handle, file, partial });
+      return { id, path: file };
+    },
+  );
   ipcMain.handle("studio:export-write", async (event, id, position, data) => {
     assertSender(event);
     const entry = openExports.get(id);
@@ -490,13 +535,26 @@ app.whenReady().then(() => {
     if (!entry) return;
     openExports.delete(id);
     await entry.handle.close();
-    // A cancelled or failed export never leaves a half-written file behind.
-    if (!keep) await fs.promises.rm(entry.file, { force: true });
+    // A cancelled or failed export only ever removes its own side file.
+    if (!keep) return fs.promises.rm(entry.partial, { force: true });
+    try {
+      await fs.promises.rename(entry.partial, entry.file);
+    } catch {
+      await fs.promises.rm(entry.partial, { force: true });
+      throw new Error(
+        `Couldn't save “${path.basename(entry.file)}”. If it's open in another app, close it and export again.`,
+      );
+    }
+    exported.add(entry.file);
+    rememberExportDir(path.dirname(entry.file));
   });
   ipcMain.handle("studio:reveal", (event, file) => {
     assertSender(event);
     const resolved = path.resolve(String(file));
-    if (!resolved.startsWith(exportsDir() + path.sep))
+    if (
+      !exported.has(resolved) &&
+      !resolved.startsWith(exportsDir() + path.sep)
+    )
       throw new Error("Can only show exported files.");
     shell.showItemInFolder(resolved);
   });

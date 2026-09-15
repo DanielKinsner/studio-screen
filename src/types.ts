@@ -315,10 +315,12 @@ declare global {
         saveProject: (folder: string, json: string) => Promise<void>;
       };
       exportFile: {
+        /** Asks where to save (Save As) unless `quick`; null when cancelled. */
         open: (
           name: string,
           extension: string,
-        ) => Promise<{ id: string; path: string }>;
+          options?: { quick?: boolean },
+        ) => Promise<{ id: string; path: string } | null>;
         write: (
           id: string,
           position: number,

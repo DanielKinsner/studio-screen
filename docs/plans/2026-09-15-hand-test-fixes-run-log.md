@@ -129,3 +129,26 @@ Commit: `4701e8a`.
 - At the **default padding (8%)** the default 3D tilt already reaches the margin, so default 3D zooms are now about **1.2% smaller** than before. That is the intended no-crop margin, not a separate change.
 - No stored expected image needed updating: `tests/3d-expected.png` is regenerated from the compositor on every `v2-proof` run.
 
+Commit: `ceb6811`.
+
+## Slice 7: Choose where exports go (R12, D7)
+
+**Shipped:**
+- `electron/main.cjs`: `studio:export-open(name, ext, { quick })` shows `dialog.showSaveDialog(mainWindow, { defaultPath, filters })` starting in the remembered folder; cancel returns `null`; `quick` (Ctrl+E) or `STUDIO_EXPORT_DIR` skip the dialog and use `uniquePath`. The last folder is kept in `userData/export-state.json` (`{ lastDir }`), validated on read (absolute, existing directory) with fallback to `Videos\Studio Screen\Exports`, updated after a successful export. Exports render into `<file>.partial` and are renamed over the target only on success; cancel/failure deletes only the `.partial`. `studio:reveal` also allows any file exported this session.
+- `preload.cjs` passes options; `App.tsx` `runExport(quick)`: a cancelled Save As returns quietly with the dialog still open (progress only appears after a path is chosen); toasts and the done subtitle say "Saved to <folder name>."; Ctrl+E passes `quick`.
+- New `tests/export-location.mjs` (README → Tests and Workflow updated); `.gitignore` adds its folders.
+
+**Verification:**
+- `node tests/export-location.mjs` PASS (Electron, main-process stubs for the dialog and `shell.showItemInFolder`, test profile seeded to a throwaway folder): (1) dialog default `…\.export-location\start\Export location test.mp4`, filter `MP4 video`; the pre-existing "ORIGINAL" `Chosen name.mp4` replaced by a 1,561,459-byte MP4 (`ftyp`), no `.partial` left, `lastDir` persisted to `…\chosen`, toast "Export complete. Saved to chosen.", subtitle "Saved to chosen.", Show in folder revealed that exact path; (2) cancel: no new file, 0 toasts, no progress bar, Export button enabled; (3) Ctrl+E: no extra dialog call, `Export location test.mp4` saved in `chosen`; (4) with the write IPC forced to fail, the toast showed the error and `Keep me.mp4` still read "KEEP ME", no `.partial`; (5) corrupt `export-state.json` → dialog opened in `C:\Users\SM - Dan\Videos\Studio Screen\Exports` (cancelled, nothing written).
+- `npm test` 84 passed; `npm run build` OK; `browser-smoke` (browser download path unchanged) PASS; `a1-playback` PASS.
+- `node tests/a3-export.mjs`: **correctness passed twice** (3600 frames, gap spread 1e-6 s, difference 2.21; edited 480 frames, pitch 439/440.7; cancel clean; desktop minimized, `STUDIO_EXPORT_DIR` with no dialog, 3600 frames, files **2 → 1** during/after cancel via the new `.partial`) but the **speed budget failed** (37.81 s and 39.30 s; desktop 42.9/43.4 s). Cause found: **Codex was running another project in parallel** (`yes-master`: `cargo build --example mastering_quality_witness`, headless verify scripts, several Vite servers), and Dan had the real Studio Screen 0.3.0 open. A3's browser export calls `exportProject` directly and never runs any code this slice changed. Not a stop trigger; speed re-checked in later slices.
+
+**Deviations / judgment calls:**
+- The Save As default file name is the auto-numbered unique name (e.g. "My video (2).mp4"), so pressing Enter never replaces an earlier export by accident; choosing an existing file still replaces it (Windows asks first).
+- If the chosen name has no matching extension, it is appended.
+- The folder is remembered only after an export **succeeds** ("last folder used"), not when a dialog is confirmed and then cancelled.
+- If the final rename fails (for example, the old file is open in a player), the `.partial` is removed and the toast says to close the file and export again.
+- The modal's Export button used `onClick={runExport}`, which would have passed the click event as `quick` and skipped Save As; changed to `() => runExport()`.
+- If the app is killed mid-export, a `.partial` file can remain next to the target (the original is untouched).
+- Raw IPC error text ("Error invoking remote method…") is still shown for disk errors, as before.
+

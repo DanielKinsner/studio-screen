@@ -31,3 +31,5 @@ tests/.profile-sync-fixture/
 # Local scratch diagnostic and its generated Electron profile.
 tests/.geometry-probe.cjs
 tests/.geometry-profile/
+tests/.export-location/
+tests/.profile-export/

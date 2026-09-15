@@ -28,8 +28,8 @@ contextBridge.exposeInMainWorld("studioDesktop", {
       ipcRenderer.invoke("studio:project-save", folder, json),
   },
   exportFile: {
-    open: (name, extension) =>
-      ipcRenderer.invoke("studio:export-open", name, extension),
+    open: (name, extension, options) =>
+      ipcRenderer.invoke("studio:export-open", name, extension, options),
     write: (id, position, data) =>
       ipcRenderer.invoke("studio:export-write", id, position, data),
     close: (id, keep) => ipcRenderer.invoke("studio:export-close", id, keep),

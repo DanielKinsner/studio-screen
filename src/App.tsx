@@ -110,6 +110,9 @@ const tabs = [
   { id: "annotations", label: "Annotate", icon: Type },
 ];
 const uid = () => crypto.randomUUID();
+/** The folder a saved file is in, by name ("Exports"). */
+const folderName = (file: string) =>
+  file.split(/[\\/]/).slice(-2, -1)[0] || file;
 function Modal({
   title,
   subtitle,
@@ -221,7 +224,9 @@ export default function App() {
     }
   });
   const discardRef = useRef(false);
-  const runExportRef = useRef<() => Promise<void>>(async () => {});
+  const runExportRef = useRef<(quick?: boolean) => Promise<void>>(
+    async () => {},
+  );
   // How the take ended, and where the bar was: the auto-edit trims that reach.
   const stopRef = useRef<{
     kind: StopKind;
@@ -677,10 +682,10 @@ export default function App() {
         setPlaying((v) => !v);
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "e") {
-        // Quick export with the last settings used.
+        // Quick export with the last settings, next to the last export.
         e.preventDefault();
         setModal("export");
-        void runExportRef.current();
+        void runExportRef.current(true);
       }
       if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
         e.preventDefault();
@@ -1034,7 +1039,8 @@ export default function App() {
     );
   }
   runExportRef.current = runExport;
-  async function runExport() {
+  /** `quick` (Ctrl+E) saves next to the last export without asking where. */
+  async function runExport(quick = false) {
     if (abortRef.current) return;
     setPlaying(false);
     setExportDone(false);
@@ -1042,17 +1048,22 @@ export default function App() {
     setExportSpeed(0);
     const controller = new AbortController();
     abortRef.current = controller;
-    setExportProgress(0);
     const desktop = window.studioDesktop;
     const format = exportFormat;
     const name =
       project.name.replace(/[^a-z0-9 -]/gi, "").trim() || "Studio Screen";
-    let file: { id: string; path: string } | undefined;
+    let file: { id: string; path: string } | null = null;
     let kept = false;
     let lastReport = 0;
     try {
-      // The desktop app streams the file straight to disk as it renders.
-      if (desktop) file = await desktop.exportFile.open(name, format);
+      // The desktop app asks where to save (Save As), then streams the file
+      // straight to disk as it renders.
+      if (desktop) {
+        file = await desktop.exportFile.open(name, format, { quick });
+        // Save As was cancelled: stay in the export dialog, ready to try again.
+        if (!file) return;
+      }
+      setExportProgress(0);
       const blob = await exportProject(project, {
         format,
         height: format === "gif" ? Math.min(exportHeight, 480) : exportHeight,
@@ -1076,7 +1087,7 @@ export default function App() {
         await desktop!.exportFile.close(file.id, true);
         kept = true;
         setExportedPath(file.path);
-        notify("Export complete. Saved to Videos › Studio Screen › Exports.");
+        notify(`Export complete. Saved to ${folderName(file.path)}.`);
       } else if (blob) {
         download(blob, `${name}.${format}`);
         notify("Export complete. Your file is ready in downloads.");
@@ -2561,7 +2572,7 @@ export default function App() {
           subtitle={
             exportDone
               ? exportedPath
-                ? "Saved to Videos › Studio Screen › Exports."
+                ? `Saved to ${folderName(exportedPath)}.`
                 : "Your video has been sent to your downloads."
               : "Beautifully framed. Entirely yours. No watermark."
           }
@@ -2696,7 +2707,10 @@ export default function App() {
                 Cancel export
               </button>
             ) : (
-              <button className="button primary" onClick={runExport}>
+              <button
+                className="button primary"
+                onClick={() => void runExport()}
+              >
                 <ArrowDownToLine size={16} />
                 {exportDone ? "Export again" : "Export video"}
               </button>

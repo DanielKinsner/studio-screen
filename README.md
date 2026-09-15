@@ -32,7 +32,7 @@ Portable Windows build: `npm run desktop:pack` (output in `release/`, unsigned l
 2. **Start recording**. Studio Screen hides, counts 3-2-1, and shows a small floating bar: pause, speaker notes, discard, finish. The bar, the countdown and the notes never appear in the video. **Ctrl+Shift+R** also finishes.
 3. On Finish the editor opens with an automatic rough cut: dead air trimmed at both ends, typing sped up 2×, waiting sped up 4×, zooms that glide between the things you clicked, and the look you used last. The toast offers **Back to raw**; automatic clips are dashed on the timeline with a × to remove any one of them.
 4. Tweak: **Focus & 3D** (Camera feel: Snappy / Smooth / Floaty, 3D angles), **Pacing** (speed sections, cuts, Back to raw / Apply automatic edit), **Canvas**, **Cursor**, **Captions**, **Annotate**.
-5. **Export video** (or **Ctrl+E** to export with the last settings): MP4, WebM or GIF, rendered frame by frame on the graphics card, usually faster than real time. The desktop app saves to `Videos\Studio Screen\Exports` and offers **Show in folder**.
+5. **Export video**: MP4, WebM or GIF, rendered frame by frame on the graphics card, usually faster than real time. The desktop app asks where to save (Save As, starting in the last folder used; first time `Videos\Studio Screen\Exports`) and offers **Show in folder**. **Ctrl+E** exports again with the last settings straight into that folder, no dialog. An existing file is only replaced once the new export has finished.
 
 **Ctrl + = / Ctrl + −** makes the whole interface bigger or smaller, and remembers it.
 
@@ -70,6 +70,7 @@ node tests/a1-playback.mjs
 node tests/editor-interactions.mjs   # deselect, one undo per gesture
 node tests/scrub-frames.mjs          # scrubbing never flashes the empty card
 node tests/3d-fit.mjs                # 3D at padding 0 never crops the card
+node tests/export-location.mjs       # desktop: Save As, Ctrl+E, failures keep files
 node tests/a1-preview-perf.mjs
 node tests/a3-export.mjs
 # These record the screen and/or move the mouse; they wait for an idle PC:
