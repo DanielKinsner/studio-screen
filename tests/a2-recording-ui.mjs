@@ -8,11 +8,16 @@
 // Run 2 (control): same, with capture exclusion switched off. The magenta bar
 // must be found, proving the frame scan can see it.
 import { _electron as electron, expect } from "@playwright/test";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 
 const root = process.cwd();
+const idle = Number(execFileSync("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "tests/idle.ps1"], { encoding: "utf8", windowsHide: true }).trim());
+if (!Number.isFinite(idle) || idle < 60) {
+  console.log(`SKIPPED: PC idle for ${idle} s; need at least 60 s.`);
+  process.exit(3);
+}
 const ffmpeg =
   process.env.FFMPEG_PATH ||
   "C:/Program Files (x86)/Common Files/AutoPod/ffmpeg/bin/ffmpeg.exe";

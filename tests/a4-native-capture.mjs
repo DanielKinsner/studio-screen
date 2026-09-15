@@ -15,6 +15,7 @@ import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { audioFilter } from "./av-measure.mjs";
 
 const run = promisify(execFile);
 const root = process.cwd();
@@ -305,7 +306,7 @@ for (let f = 0; f < Math.floor(clip.length / size); f++)
     flashFrame = f;
     break;
   }
-const pcm = await decode(["-ss", String(tail), "-i", video, "-vn", "-ac", "1", "-ar", "48000", "-f", "f32le"]);
+const pcm = await decode(["-ss", String(tail), "-i", video, "-vn", "-af", audioFilter, "-ac", "1", "-ar", "48000", "-f", "f32le"]);
 const samples = new Float32Array(pcm.buffer, pcm.byteOffset, Math.floor(pcm.length / 4));
 let onset = -1;
 for (let i = 0; i + 240 < samples.length; i += 48) {

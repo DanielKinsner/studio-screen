@@ -56,6 +56,8 @@ Camera and microphone recording are intentionally excluded. The sample project i
 
 ## A2 — recording gets out of the way — 2026-09-14
 
+- Resumed native run **passed**: 11 sampled frames in each take; protected footage **0 magenta pixels**, **0 black share**; unprotected control **1,045 magenta pixels**. Countdown, hidden editor, visible bar, restored focus, no leftover windows and no page errors all passed. A2 now enforces its own 60-second idle check (observed refusing at 57.813 s); both videos were deleted after measurement.
+
 - `tests/a2-recording-ui.mjs` passed with **browser capture** (before the helper existed): countdown window seen, editor hidden during countdown, bar visible, editor visible and focused after Finish, no leftover windows; magenta test bar: 0 marker pixels and no black box in the protected take, 1,143 marker pixels in the control take with exclusion off.
 - **Not yet re-run with the capture helper** (the test was updated for native recordings but needs an idle PC).
 - `tests/desktop-capture.mjs` (browser-capture fallback, pause/resume through the bar, metadata, export) passed.
@@ -77,14 +79,16 @@ Camera and microphone recording are intentionally excluded. The sample project i
 - `node tests/a4-av-sync.mjs` ran after its `tests/idle.ps1` guard accepted at least 60 s idle; no `--force`. **Failed (exit 1):** captured frame size **2560×1440**, **0 flashes**, **6 tones**, **0 paired offsets**. The script's `meanMs: 0` is its empty-array fallback and is **not a valid sync measurement**. The flash-detection failure prevents confirming the prior ~49 ms delay; the underlying reason was not established. Receipt: `tests/a4-av-sync-results.json`.
 - Stopped at the requested sync gate. Did **not** run the −49 ms calibration, modify `studio:native-start`, or run a4-native-capture, a2-recording-ui, a5-open-speed or the five-minute soak. No product fix or regression test was added without a diagnosed cause. The sync test deleted `tests/.native/av-sync.mp4` and `av-sync.jsonl`; both paths were independently confirmed absent. Waiting for Dan's review/hand test before resuming.
 
-### Earlier evidence (original PC)
-
 ### Resumed sync diagnosis — 2026-09-14
 
 - Dan authorized continuing the verification work. The test fixture had two portability problems: launch arguments did not reliably position the playback window on the captured monitor, and its fixed 800×400 sampling rectangle included background around a 640×360 video at 100% scaling. Explicit CDP placement at (0, 0), fullscreen playback and a relative central crop produced all six flashes on this dual-1440p setup.
 - Measurement correction: decoding audio directly to raw samples discards timestamp gaps. A synthetic gapped-audio regression reproduced a false 0.808 s onset for a tone scheduled at 1 s; timestamp-preserving resampling restored 1.000 s. The synthetic image regression reproduced the old crop failure and detected the exact onset at both 1440p and 4K. `node tests/av-fixture.mjs` passed both; 63 unit tests and production build passed. Missing flashes now report a null mean, and failure cleanup covers the recorded media and event log.
 - Corrected, idle-gated native measurements: uncalibrated **−74, −24, −49, −88, −24 ms (mean −52 ms)**; with −49 ms configured **−121, −57, −91, −128, −63 ms (mean −92 ms)**. Both detected six flashes and six tones and failed the ±20 ms criterion. An earlier raw-audio decode measured apparent growing drift (mean −142 ms); that superseded measurement should not be used for calibration.
 - The original +49 ms delay is not reproduced here, and applying −49 ms makes the measured lead worse. No app offset was applied. These observations do not establish the remaining timing error's root cause. Native/A2/A5/soak verification continues independently under Dan's renewed instruction.
+- Native end-to-end run reached its final assertions, failing only at the A/V assertion (**−33 ms**, before applying timestamp-preserving decoding to this test too). Measurements: **0.51 px** click error, **0** stray cursor pixels versus **102** in the baked-cursor control; six left clicks, one right click, one wheel event, Ctrl+K, four typing events, text/pointer/arrow shapes. Helper kill retained **3.92 s** media / **4.01 s** project; app kill recovered a **3.62 s** project and helper exited in **433 ms**. Crash assertions come after the failing sync assertion and were not executed in that run; these are observed recovery measurements. Test recording folders were deleted.
+- Five-minute soak attempt interrupted by renewed keyboard/mouse use at **247.832 s / 14,870 frames**, **2560×1440 at 60 fps**, 15 memory samples, settled **107–109 MB** (2 MB spread). **Not a completed five-minute pass.** The harness now stops on resumed input, deletes footage, verifies completed duration/frame count before passing, and reports actual capture resolution instead of hard-coding 4K. Both soak media and event log were confirmed absent.
+
+### Earlier evidence (original PC)
 
 - `npm run native:check` on the RTX 4080 PC: capture, borderless (access status 4), dirty regions, hardware H.264, loopback audio all available.
 - Helper smoke take (3 s, 4K60, with a pause): H.264 High 3840×2160 60 fps + AAC; video 2.033 s and audio 2.028 s; pointer, cursor-shape and dirty-region events logged.
@@ -94,6 +98,8 @@ Camera and microphone recording are intentionally excluded. The sample project i
 - Not run: `tests/a4-soak.mjs` (30-minute memory check), a clean full pass of `tests/a4-native-capture.mjs`.
 
 ## A5 — auto-edit on stop — 2026-09-14
+
+- Resumed verification: `a5-open-speed` initially failed because it read IndexedDB before the app's 700 ms autosave debounce, receiving the old 24-second sample (auto=false) even though the new take was already visible. The test now waits for save completion after recording the open/first-frame times. Repeat **passed**: **288 ms** to auto-edit, **635 ms** to first frame, **1,439 ms** to save confirmation; **300 s**, **60,228 points**, **10 speed sections**, auto-edit=true, no page errors. This is a test race fix; the product's save delay and opening behavior are unchanged.
 
 - 7 `autoEdit` unit tests (trim to first action and bar reach, hotkey stop, typing/idle speed-ups, caret blinks ignored, short takes raw, no clicks, Back to raw and re-apply); 61 unit tests in total pass.
 - Browser check on a 40 s project: Apply automatic edit → "3 zooms · 1 typing speed-up · 1 idle speed-up", dashed automatic clips, × removed one speed-up, Back to raw removed all automatic clips.

@@ -171,6 +171,11 @@ try {
     )
     .toBeGreaterThan(300);
   const framed = Date.now() - finished;
+  // The preview can open before the 700 ms autosave debounce. Reading IndexedDB
+  // immediately returned the previous 24-second sample instead of this take.
+  // Keep that persistence wait outside the preview/open timing measurement.
+  await page.getByText("Saved locally", { exact: true }).waitFor();
+  const saved = Date.now() - finished;
   const project = await page.evaluate(async () => {
     const { listProjects } = await import("/src/storage.ts");
     const p = (await listProjects()).sort((a, b) => b.updated - a.updated)[0];
@@ -186,6 +191,7 @@ try {
   results.open = {
     editedMs: edited,
     firstFrameMs: framed,
+    savedMs: saved,
     toast,
     project,
     errors,

@@ -1,4 +1,4 @@
-// A4 soak: record the main display at 4K60 with the capture helper for a long
+// A4 soak: record the main display at 60 fps with the capture helper for a long
 // stretch (default 30 minutes; `--minutes 5` for a shorter run) and sample the
 // helper's memory. Passes when memory after the first minute stays within
 // 150 MB. The recording is deleted afterwards; only numbers are kept.
@@ -46,15 +46,21 @@ const helper = spawn(
   { stdio: ["pipe", "pipe", "inherit"] },
 );
 let last = {};
+let startedEvent = {}, pending = "";
 helper.stdout.on("data", (d) => {
-  for (const line of String(d).split("\n"))
+  pending += String(d);
+  const lines = pending.split("\n");
+  pending = lines.pop();
+  for (const line of lines)
     try {
       const m = JSON.parse(line);
+      if (m.event === "started") startedEvent = m;
       if (m.event) last = m;
       if (m.event === "error") console.error(m.message);
     } catch {}
 });
 const samples = [];
+let interrupted = false;
 const started = Date.now();
 const memory = async () => {
   const { stdout } = await run("powershell.exe", [
@@ -66,6 +72,12 @@ const memory = async () => {
 };
 while (Date.now() - started < minutes * 60000) {
   await new Promise((r) => setTimeout(r, 15000));
+  const { stdout: idleText } = await run("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "tests/idle.ps1"]);
+  if (!Number.isFinite(Number(idleText.trim())) || Number(idleText.trim()) < 16) {
+    interrupted = true;
+    console.log("Stopping soak: keyboard or mouse activity resumed.");
+    break;
+  }
   const mb = await memory().catch(() => null);
   if (mb === null) break;
   samples.push({
@@ -82,6 +94,9 @@ const stat = await fs.stat(output).catch(() => ({ size: 0 }));
 const settled = samples.filter((s) => s.minute >= 1).map((s) => s.mb);
 const result = {
   minutes,
+  interrupted,
+  frameSize: [startedEvent.width, startedEvent.height],
+  fps: startedEvent.fps,
   samples,
   settledMinMb: Math.min(...settled),
   settledMaxMb: Math.max(...settled),
@@ -96,10 +111,18 @@ await fs.writeFile(
 await fs.rm(output, { force: true });
 await fs.rm(events, { force: true });
 console.log(JSON.stringify({ ...result, samples: samples.length }, null, 2));
+if (interrupted) {
+  console.log("SKIPPED: interrupted by PC use; recording deleted, no completed soak result.");
+  process.exit(3);
+}
+if (last.event !== "stopped" || last.seconds < minutes * 60 - 1 || last.frames < minutes * 60 * 60 * 0.99) {
+  console.log("FAIL: helper did not complete the requested recording duration at 60 fps.");
+  process.exit(1);
+}
 if (!(result.growthMb <= 150)) {
   console.log("FAIL: helper memory kept growing.");
   process.exit(1);
 }
 console.log(
-  `PASS: ${minutes} min 4K60 recording with flat memory (${result.growthMb} MB spread).`,
+  `PASS: ${minutes} min ${result.frameSize.join("×")} at ${result.fps} fps with flat memory (${result.growthMb} MB spread).`,
 );
