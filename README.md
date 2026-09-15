@@ -69,6 +69,7 @@ node tests/v2-audio.mjs
 node tests/a1-playback.mjs
 node tests/editor-interactions.mjs   # deselect, one undo per gesture
 node tests/scrub-frames.mjs          # scrubbing never flashes the empty card
+node tests/3d-fit.mjs                # 3D at padding 0 never crops the card
 node tests/a1-preview-perf.mjs
 node tests/a3-export.mjs
 # These record the screen and/or move the mouse; they wait for an idle PC:

@@ -10,7 +10,12 @@ import {
   shortcutAt,
   poseAt,
 } from "./motion";
-import { PerspectiveRenderer } from "./perspective";
+import {
+  FIT_MARGIN,
+  PerspectiveRenderer,
+  fitScale,
+  type CardRect,
+} from "./perspective";
 export type Media = {
   video?: HTMLVideoElement | null;
   /** An exactly decoded source frame (export); takes priority over `video`. */
@@ -303,6 +308,17 @@ function drawBackground(
     );
   }
 }
+/** Where the recording's card sits on a w×h canvas, in pixels, before any 3D. */
+export function cardRect(w: number, h: number, p: Project, media: Media) {
+  const frame = media.frame;
+  const sw = p.demo ? 1280 : frame?.width || media.video?.videoWidth || 1920,
+    sh = p.demo ? 800 : frame?.height || media.video?.videoHeight || 1080;
+  const pad = (Math.min(w, h) * p.settings.padding) / 100;
+  const fit = Math.min((w - pad * 2) / sw, (h - pad * 2) / sh);
+  const fw = sw * fit,
+    fh = sh * fit;
+  return { fx: (w - fw) / 2, fy: (h - fh) / 2, fw, fh };
+}
 function drawScreen(
   c: CanvasRenderingContext2D,
   w: number,
@@ -314,14 +330,7 @@ function drawScreen(
   const s = p.settings;
   const frame = media.frame;
   const source = p.demo ? demoFrame(t) : (frame?.image ?? media.video);
-  const sw = p.demo ? 1280 : frame?.width || media.video?.videoWidth || 1920,
-    sh = p.demo ? 800 : frame?.height || media.video?.videoHeight || 1080;
-  const pad = (Math.min(w, h) * s.padding) / 100;
-  const fit = Math.min((w - pad * 2) / sw, (h - pad * 2) / sh);
-  const fw = sw * fit,
-    fh = sh * fit,
-    fx = (w - fw) / 2,
-    fy = (h - fh) / 2;
+  const { fx, fy, fw, fh } = cardRect(w, h, p, media);
   c.save();
   c.shadowColor = `rgba(30,16,22,${s.shadow / 130})`;
   c.shadowBlur = h * 0.06;
@@ -638,14 +647,27 @@ export function renderFrame(
     ac.clearRect(0, 0, w, h);
     ac.globalCompositeOperation = "lighter";
     ac.globalAlpha = 1 / count;
+    // The 3D layer is the whole canvas with the card inside it; fit the card.
+    const card = cardRect(w, h, p, media);
+    const rect: CardRect = {
+      left: (2 * card.fx) / w - 1,
+      right: (2 * (card.fx + card.fw)) / w - 1,
+      top: 1 - (2 * card.fy) / h,
+      bottom: 1 - (2 * (card.fy + card.fh)) / h,
+    };
     for (let i = 0; i < count; i++) {
       const st = Math.max(0, t - ((count - 1 - i) * blur) / 6000);
       sc.clearRect(0, 0, w, h);
       drawScreen(sc, w, h, p, st, media);
       if (active3d) {
         scene.perspective ??= new PerspectiveRenderer();
+        const samplePose = poseAt(p, st);
         ac.drawImage(
-          scene.perspective.render(scene.screen, poseAt(p, st)),
+          scene.perspective.render(
+            scene.screen,
+            samplePose,
+            fitScale(samplePose, w / h, FIT_MARGIN, rect),
+          ),
           0,
           0,
         );

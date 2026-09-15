@@ -106,3 +106,26 @@ Commit: `f3f3a42`.
 - Settings fields in this codebase are non-optional and filled by `migrateProject` from `defaults` (like `cameraResponse`), so `zoomLead` follows that pattern rather than being `?:` optional; `autoZooms` and the camera also fall back defensively if an unmigrated object appears.
 - The neutral opening applies to every channel (scale, centre, tilt, offset, perspective, lift), not only scale.
 
+Commit: `4701e8a`.
+
+## Slice 6: 3D never crops the recording (R2)
+
+**Shipped:** `src/perspective.ts` gains `project(pose, aspect, px, py, fit)` (the vertex shader's math in TypeScript), `fitScale(pose, aspect, margin, card)` and `FIT_MARGIN = 0.02`; the shader takes a `fit` uniform that scales the projected result about the frame centre. `src/compositor.ts` exports `cardRect()` (the card's pixel rectangle, now shared with `drawScreen`) and fits every 3D sample, including motion-blur samples, for preview and export alike. New `tests/3d-fit.mjs` (README → Tests) and `src/perspective.test.ts` (5 tests).
+
+**Root cause:** the 3D renderer tilts the whole screen layer and nothing corrected for corners that project past the canvas edge; at padding 0 the card already touches the edges before tilting.
+
+**What the 3D texture contains:** a canvas-sized transparent layer with only the card (shadow, recording, cursor, browser bar) drawn inside it; the background is drawn separately underneath. The fit therefore uses the card's own four corners, not the layer's.
+
+**Verification:**
+- `tests/3d-fit.mjs` failed first at padding 0 + max tilt/rotation/FOV: **1,024 card pixels on the frame edge** (card cut off on the left and top). After: default 3D zoom at padding 0 → 0 edge pixels, near-white card share 0.374 (flat 0.622); maximum tilt 40/40/30 at FOV 75 → 0 edge pixels, share 0.175. Screenshots `tests/3d-fit-default.png`, `tests/3d-fit.png` (git-ignored) show all four corners inside the frame.
+- Unit tests failed first (no functions), then pass: flat projection identity; flat card → 1 at padding 0 and padded; three extreme poses (±40/±40/±30, FOV 25 and 75, offsets ±60) → fit < 1 with all projected corners within 0.98; fit changes < 0.01 per 0.25° step while tilting from flat to 40° (no jump); a card at ±0.7 with the default tilt → 1.
+- `npm test` 14 files, 84 passed; `npm run build` OK; `browser-smoke`, `a1-playback`, `v2-visual` PASS.
+- `node tests/v2-proof.mjs` PASS: 3D export vs compositor difference 2.14, effect difference **15.33** (assertion > 15). A/B with the fit temporarily disabled gave 16.41 (matching VALIDATION's 16.4), so the fit is what lowered it; still passes unchanged, but the margin is now thin.
+- `node tests/a3-export.mjs` PASS (machine quieter this time): 60 s export **24.16 s**, 3600 frames, gap spread 1e-6 s, frame difference 2.21 (was 2.19: the compared 3D frame now includes the fit on both sides), AAC; edited 480 frames, pitch 439/440.7; cancel clean; desktop 23.6 s, 3600 frames, files 2 → 1. This also clears slice 5's load-blocked speed check.
+
+**Deviations / judgment calls:**
+- The fit scales the projected card about the **frame centre** (the plan's "largest scale ≤ 1"). That always has a solution, even with a 60% offset that pushes the card's centre out of frame; with extreme asymmetric poses the fitted card can sit off-centre.
+- The 2% margin **fades in** with the amount of 3D (sum of |tilts| and |offsets|, full at 4). A flat card at padding 0 touches the edges, so a fixed margin would make the picture jump 2% the moment a 3D zoom starts.
+- At the **default padding (8%)** the default 3D tilt already reaches the margin, so default 3D zooms are now about **1.2% smaller** than before. That is the intended no-crop margin, not a separate change.
+- No stored expected image needed updating: `tests/3d-expected.png` is regenerated from the compositor on every `v2-proof` run.
+
