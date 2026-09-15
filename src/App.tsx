@@ -2986,7 +2986,8 @@ export default function App() {
             : saved}
         </span>
         <span>
-          Less editing. More creating.<span className="version">v0.2.1</span>
+          Less editing. More creating.
+          <span className="version">v{__APP_VERSION__}</span>
         </span>
       </footer>
       {menu && (

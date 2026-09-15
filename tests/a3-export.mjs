@@ -293,6 +293,8 @@ const app = await electron.launch({
     ...process.env,
     STUDIO_USER_DATA: path.join(root, "tests/.profile"),
     STUDIO_EXPORT_DIR: exportDir,
+    // Launch-time recovery scans this folder; never point it at real takes.
+    STUDIO_PROJECTS_DIR: path.join(root, "tests/.projects"),
   },
 });
 try {

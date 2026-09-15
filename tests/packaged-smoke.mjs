@@ -9,7 +9,18 @@ const executablePath = path.resolve(
     ? `release/Studio Screen ${version}.exe`
     : "release/win-unpacked/Studio Screen.exe",
 );
-const app = await electron.launch({ executablePath, timeout: 60000 });
+// A throwaway profile and recordings folder: the smoke test edits a project
+// and the app recovers unfinished takes on launch, so it must never see
+// Dan's real library or Videos\Studio Screen.
+const scratch = path.resolve("tests/.packaged");
+await fs.rm(scratch, { recursive: true, force: true });
+const env = {
+  ...process.env,
+  STUDIO_USER_DATA: path.join(scratch, "profile"),
+  STUDIO_PROJECTS_DIR: path.join(scratch, "recordings"),
+  STUDIO_EXPORT_DIR: path.join(scratch, "exports"),
+};
+const app = await electron.launch({ executablePath, timeout: 60000, env });
 try {
   const page = await app.firstWindow();
   await page.getByText("Saved locally", { exact: true }).waitFor();
@@ -17,6 +28,7 @@ try {
   page.on("pageerror", (e) => errors.push(e.message));
   await expect(page.getByLabel("Composited video preview")).toBeVisible();
   await expect(page.locator(".app-footer")).toContainText("Desktop studio");
+  await expect(page.locator(".app-footer .version")).toHaveText(`v${version}`);
   await page.getByRole("button", { name: "Focus & 3D", exact: true }).click();
   await page.getByRole("button", { name: "Add 3D zoom", exact: true }).click();
   await expect(

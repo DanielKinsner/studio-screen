@@ -34,3 +34,4 @@ tests/.geometry-profile/
 tests/.export-location/
 tests/.profile-export/
 tests/.profile-alt/
+tests/.packaged/

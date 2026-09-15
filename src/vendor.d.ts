@@ -1,3 +1,5 @@
+/** The package.json version, filled in by Vite at build time. */
+declare const __APP_VERSION__: string;
 declare module "gifenc" {
   export function GIFEncoder(): {
     writeFrame: (

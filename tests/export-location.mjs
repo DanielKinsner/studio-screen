@@ -57,7 +57,12 @@ await fs.writeFile(
   path.join(profile, "export-state.json"),
   JSON.stringify({ lastDir: startDir }),
 );
-const env = { ...process.env, STUDIO_USER_DATA: profile };
+// Recoveries on launch scan the recordings folder: keep it throwaway too.
+const env = {
+  ...process.env,
+  STUDIO_USER_DATA: profile,
+  STUDIO_PROJECTS_DIR: path.join(base, "recordings"),
+};
 delete env.STUDIO_EXPORT_DIR;
 
 const results = {};

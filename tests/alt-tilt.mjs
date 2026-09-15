@@ -13,7 +13,12 @@ import path from "node:path";
 const root = process.cwd();
 const profile = path.join(root, "tests/.profile-alt");
 await fs.rm(profile, { recursive: true, force: true });
-const env = { ...process.env, STUDIO_USER_DATA: profile };
+// Recoveries on launch scan the recordings folder: keep it throwaway too.
+const env = {
+  ...process.env,
+  STUDIO_USER_DATA: profile,
+  STUDIO_PROJECTS_DIR: path.join(profile, "recordings"),
+};
 delete env.STUDIO_EXPORT_DIR;
 const results = {};
 const app = await electron.launch({ args: [".", "--dev"], cwd: root, env });
