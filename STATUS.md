@@ -21,6 +21,12 @@ Setup, five native capability checks, 65 JavaScript tests, production build, bro
 
 The native end-to-end suite now passes on the 150% secondary display: **1.26 px** click error, full input events, **−7 ms** sync, zero cursor pixels versus 234 in the control, and both crash-recovery assertions. The test injector needed per-monitor thread DPI awareness. A2 rerun passed (0 protected marker pixels; 1,071 control); A5 rerun passed (357 ms auto-edit, 737 ms first frame, 1,552 ms saved). The final five-minute soak passed: 308.165 s, 18,490 frames, 2560×1440 at 60 fps, 106–107 MB settled memory. The retry queue has exited. See [VALIDATION.md](VALIDATION.md).
 
+### 2026-09-15: Dan's first hand test (0.3.0) → fix plan ready
+
+The 0.3.0 portable (`release/Studio Screen 0.3.0.exe`) was built with a freshly rebuilt helper; the bundled helper hash matched, and the packaged app launched. Dan recorded and exported two videos at **4K60: clean, audio good**. He found 12 issues and requests: white frames while scrubbing, undo on sliders, deselect, slow camera on fast clicks, zoom lead, 3D cropping at zero padding, export location, timeline size, Premiere-style cutting, a focus dot, 3D grab-to-tilt, and typing zoom.
+
+**Next: run [docs/plans/2026-09-15-hand-test-fixes-execution-plan.md](docs/plans/2026-09-15-hand-test-fixes-execution-plan.md) in one long session.** Every decision is locked there, and it ends by packing 0.4.0 with a new hand test. The older steps below are superseded where they conflict.
+
 ## Next steps (in order)
 
 **Safe stopping point:** all requested automated checks are complete. No background capture queue remains. Real-screen videos were deleted after measurement; the final soak video/event log were confirmed absent. Earlier interrupted attempts are historical evidence, not failures of the completed soak.
