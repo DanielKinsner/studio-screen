@@ -26,3 +26,8 @@ tests/.fake-take/
 tests/.projects-a5/
 tests/.profile-a4/
 tests/.profile-a5/
+tests/.profile-sync-fixture/
+
+# Local scratch diagnostic and its generated Electron profile.
+tests/.geometry-probe.cjs
+tests/.geometry-profile/
