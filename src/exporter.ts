@@ -6,6 +6,7 @@ import {
   BufferTarget,
   CanvasSource,
   Input,
+  MatroskaInputFormat,
   Mp4OutputFormat,
   Output,
   QUALITY_HIGH,
@@ -18,6 +19,7 @@ import {
   canEncodeVideo,
   type InputAudioTrack,
   type StreamTargetChunk,
+  type VideoSample,
 } from "mediabunny";
 import { GIFEncoder, applyPalette, quantize } from "gifenc";
 import type { Project } from "./types";
@@ -110,6 +112,48 @@ async function decodeMusic(blob: Blob) {
   }
 }
 
+/**
+ * The frame on screen at each of the given rising timestamps, decoding the file
+ * in order. Used for WebM: browser recordings with sound have no cue index,
+ * keyframes seconds apart and a new cluster every second, and mediabunny's
+ * lookup by time returns nothing for a frame whose keyframe sits in an earlier
+ * cluster. Slower across long cuts, since it decodes the footage it skips.
+ */
+async function* samplesInOrder(
+  sink: VideoSampleSink,
+  start: number,
+  timestamps: Iterable<number>,
+): AsyncGenerator<VideoSample | null, void, unknown> {
+  // Starts at the keyframe before `start`, or the file's first one.
+  const decoded = sink.samples(start);
+  let current: VideoSample | null = null;
+  let next: VideoSample | null = null;
+  let ended = false;
+  try {
+    for (const t of timestamps) {
+      while (!ended) {
+        if (!next) {
+          const result = await decoded.next();
+          if (result.done) {
+            ended = true;
+            break;
+          }
+          next = result.value;
+        }
+        if (next.timestamp > t) break;
+        current?.close();
+        current = next;
+        next = null;
+      }
+      yield current ? current.clone() : null;
+    }
+  } finally {
+    current?.close();
+    next?.close();
+    await decoded.return(undefined);
+  }
+}
+
 async function loadImage(blob?: Blob) {
   if (!blob) return undefined;
   const image = new Image();
@@ -155,7 +199,13 @@ export async function exportProject(
     const times = function* () {
       for (let i = 0; i < frames; i++) yield sourceTime(p, i / fps) + offset;
     };
-    const samples = sink?.samplesAtTimestamps(times());
+    // Edits never run backwards in source time, so WebM can be read in order.
+    const webm = (await input?.getFormat()) instanceof MatroskaInputFormat;
+    const samples =
+      sink &&
+      (webm
+        ? samplesInOrder(sink, sourceTime(p, 0) + offset, times())
+        : sink.samplesAtTimestamps(times()));
     const started = performance.now();
     const draw = async (i: number) => {
       const next = samples ? await samples.next() : undefined;
