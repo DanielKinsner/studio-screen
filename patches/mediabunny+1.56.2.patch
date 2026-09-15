@@ -1,0 +1,93 @@
+diff --git a/node_modules/mediabunny/dist/modules/src/isobmff/isobmff-demuxer.js b/node_modules/mediabunny/dist/modules/src/isobmff/isobmff-demuxer.js
+index 575d5ed..ad55acc 100644
+--- a/node_modules/mediabunny/dist/modules/src/isobmff/isobmff-demuxer.js
++++ b/node_modules/mediabunny/dist/modules/src/isobmff/isobmff-demuxer.js
+@@ -352,8 +352,13 @@ export class IsobmffDemuxer extends Demuxer {
+                 // of implicit, but it ends up working nicely.
+                 const lookupEntry = track.fragmentLookupTable.find(x => x.moofOffset === fragment.moofOffset);
+                 if (lookupEntry) {
+-                    // There's a lookup entry, let's use its timestamp
+-                    offsetFragmentTrackDataByTimestamp(trackData, lookupEntry.timestamp);
++                    // There's a lookup entry. Its time belongs to the sample it names, which isn't always the
++                    // fragment's first (Media Foundation cuts fragments between keyframes), so shift the fragment
++                    // until that sample lands on it. Treating the time as the fragment's start put whole fragments
++                    // late.
++                    const sample = getLookupEntrySample(trackData, lookupEntry);
++                    const relativeTimestamp = sample ? sample.presentationTimestamp : trackData.startTimestamp;
++                    offsetFragmentTrackDataByTimestamp(trackData, lookupEntry.timestamp - relativeTimestamp);
+                 }
+                 else {
+                     const lastCacheIndex = binarySearchLessOrEqual(fragmentPositionCache, fragment.moofOffset - 1, x => x.moofOffset);
+@@ -1655,12 +1660,16 @@ export class IsobmffDemuxer extends Demuxer {
+                     for (let i = 0; i < numberOfEntries; i++) {
+                         const time = version === 1 ? readU64Be(slice) : readU32Be(slice);
+                         const moofOffset = version === 1 ? readU64Be(slice) : readU32Be(slice);
+-                        readTrafNum(slice);
+-                        readTrunNum(slice);
+-                        readSampleNum(slice);
++                        // The entry times one random access sample, which needn't be the first in its fragment
++                        const trafNumber = readTrafNum(slice);
++                        const trunNumber = readTrunNum(slice);
++                        const sampleNumber = readSampleNum(slice);
+                         track.fragmentLookupTable.push({
+                             timestamp: time,
+                             moofOffset,
++                            trafNumber,
++                            trunNumber,
++                            sampleNumber,
+                         });
+                     }
+                     // Sort by timestamp in case it's not naturally sorted
+@@ -1685,6 +1694,9 @@ export class IsobmffDemuxer extends Demuxer {
+                         implicitBaseDataOffset: startPos,
+                         trackData: new Map(),
+                         psshBoxes: [],
++                        // 1-based positions of the current traf in this moof and trun in that traf, as tfra counts them
++                        trafNumber: 0,
++                        trunNumber: 0,
+                     };
+                     this.readContiguousBoxes(slice.slice(contentStartPos, boxInfo.contentSize));
+                     this.lastReadFragment = this.currentFragment;
+@@ -1695,6 +1707,8 @@ export class IsobmffDemuxer extends Demuxer {
+             case 'traf':
+                 {
+                     assert(this.currentFragment);
++                    this.currentFragment.trafNumber++;
++                    this.currentFragment.trunNumber = 0;
+                     this.readContiguousBoxes(slice.slice(contentStartPos, boxInfo.contentSize));
+                     // It is possible that there is no current track, for example when we don't care about the track
+                     // referenced in the track fragment header.
+@@ -1873,11 +1887,18 @@ export class IsobmffDemuxer extends Demuxer {
+                             firstKeyFrameTimestamp: null,
+                             samples: [],
+                             presentationTimestamps: [],
++                            runs: [],
+                             startTimestampIsFinal: false,
+                             encryptionAuxInfo: null,
+                         };
+                         this.currentFragment.trackData.set(track.id, trackData);
+                     }
++                    trackData.runs.push({
++                        trafNumber: this.currentFragment.trafNumber,
++                        trunNumber: ++this.currentFragment.trunNumber,
++                        firstSampleIndex: trackData.samples.length,
++                        sampleCount,
++                    });
+                     for (let i = 0; i < sampleCount; i++) {
+                         let sampleDuration;
+                         if (sampleDurationPresent) {
+@@ -3042,6 +3063,14 @@ const getNextKeyframeIndexForSample = (sampleTable, sampleIndex) => {
+     const index = binarySearchLessOrEqual(sampleTable.keySampleIndices, sampleIndex, x => x);
+     return sampleTable.keySampleIndices[index + 1] ?? -1;
+ };
++/** The sample a tfra entry names by traf, trun and sample number, or null if this fragment has no such sample. */
++const getLookupEntrySample = (trackData, entry) => {
++    const run = trackData.runs.find(x => x.trafNumber === entry.trafNumber && x.trunNumber === entry.trunNumber);
++    if (!run || entry.sampleNumber < 1 || entry.sampleNumber > run.sampleCount) {
++        return null;
++    }
++    return trackData.samples[run.firstSampleIndex + entry.sampleNumber - 1];
++};
+ const offsetFragmentTrackDataByTimestamp = (trackData, timestamp) => {
+     trackData.startTimestamp += timestamp;
+     trackData.endTimestamp += timestamp;
