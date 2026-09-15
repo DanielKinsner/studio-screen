@@ -170,6 +170,40 @@ describe("Spring camera", () => {
       expect(cameraAt(p, trimStart + 2).scale).toBeGreaterThan(2.3);
     }
   });
+  it("keeps a hand-set tilt on a cursor-following 3D zoom while still panning", () => {
+    const moving = (manualTilt?: boolean) => {
+      const p = project([
+        zoom({
+          start: 1,
+          end: 10,
+          scale: 2,
+          mode: "3d",
+          follow: true,
+          tiltX: 12,
+          tiltY: -25,
+          tiltZ: 4,
+          manualTilt,
+        }),
+      ]);
+      p.settings.followCursor = true;
+      p.points = [
+        { t: 0, x: 0.5, y: 0.5 },
+        { t: 3, x: 0.9, y: 0.2 },
+        { t: 10, x: 0.9, y: 0.2 },
+      ];
+      return p;
+    };
+    const followed = poseAt(moving(), 7);
+    expect(followed.y).not.toBeCloseTo(-25, 0);
+    const manual = moving(true);
+    const pose = poseAt(manual, 7);
+    expect(pose.x).toBeCloseTo(12, 1);
+    expect(pose.y).toBeCloseTo(-25, 1);
+    expect(pose.z).toBeCloseTo(4, 1);
+    // Cursor-follow panning still keeps the pointer in view.
+    expect(cameraAt(manual, 7).x).toBeGreaterThan(0.6);
+    expect(cameraAt(manual, 7)).toEqual(cameraAt(moving(), 7));
+  });
   it("tilts a manual 3D zoom from flat to its chosen angle and back", () => {
     const p = project([
       zoom({

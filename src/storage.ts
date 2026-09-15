@@ -162,6 +162,8 @@ export async function readProject(file: File): Promise<Project> {
   for (const z of p.zooms) {
     for (const key of ["x", "y", "scale"])
       if (!Number.isFinite(z[key])) throw new Error("Invalid focus point.");
+    if (z.manualTilt !== undefined && typeof z.manualTilt !== "boolean")
+      throw new Error("Invalid 3D angle.");
     z.x = Math.max(0, Math.min(1, z.x));
     z.y = Math.max(0, Math.min(1, z.y));
     z.scale = Math.max(1, Math.min(4, z.scale));

@@ -73,6 +73,8 @@ node tests/3d-fit.mjs                # 3D at padding 0 never crops the card
 node tests/export-location.mjs       # desktop: Save As, Ctrl+E, failures keep files
 node tests/timeline-resize.mjs       # drag the timeline taller; kept; double-click resets
 node tests/cutting.mjs               # split, gap, ripple, restore, razor, snapping, undo
+node tests/focus-dot.mjs             # focus dot, aim view, wheel, Alt-drag tilt
+node tests/alt-tilt.mjs              # desktop: Alt never shows the menu bar; tilt; shortcuts
 node tests/a1-preview-perf.mjs
 node tests/a3-export.mjs
 # These record the screen and/or move the mouse; they wait for an idle PC:

@@ -27,6 +27,8 @@ export type Zoom = {
   offsetX?: number;
   offsetY?: number;
   perspective?: number;
+  /** The tilt was set by hand, so it stays even while the camera follows the cursor. */
+  manualTilt?: boolean;
   /**
    * Click-driven focus changes inside an automatic zoom (source seconds).
    * `click` is when the click itself happened; the camera starts at `t`.

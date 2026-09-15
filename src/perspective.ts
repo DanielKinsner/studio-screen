@@ -19,13 +19,8 @@ export const cameraDistance = (perspective: number, aspect: number) =>
  * 3D pose, in the same -1..1 space: exactly the vertex shader's math, then the
  * fit-to-frame scale.
  */
-export function project(
-  pose: Pose,
-  aspect: number,
-  px: number,
-  py: number,
-  fit = 1,
-) {
+/** Rotate a point by the pose's X, Y then Z angles, as the shader does. */
+function rotate(pose: Pose, x: number, y: number, z: number) {
   const rad = Math.PI / 180;
   const cx = Math.cos(pose.x * rad),
     sx = Math.sin(pose.x * rad),
@@ -33,18 +28,59 @@ export function project(
     sy = Math.sin(pose.y * rad),
     cz = Math.cos(pose.z * rad),
     sz = Math.sin(pose.z * rad);
-  let x = px * aspect,
-    y = py,
-    z = 0;
   [y, z] = [y * cx - z * sx, y * sx + z * cx];
   [x, z] = [x * cy + z * sy, -x * sy + z * cy];
   [x, y] = [x * cz - y * sz, x * sz + y * cz];
+  return [x, y, z] as const;
+}
+
+export function project(
+  pose: Pose,
+  aspect: number,
+  px: number,
+  py: number,
+  fit = 1,
+) {
+  const [x, y, z] = rotate(pose, px * aspect, py, 0);
   const distance = cameraDistance(pose.perspective, aspect);
   const w = distance - z;
   return {
     x: ((((x / aspect) * pose.scale + (pose.offsetX / 100) * 2) * distance) / w) * fit,
     y: (((y * pose.scale - (pose.offsetY / 100) * 2) * distance) / w) * fit,
     w,
+  };
+}
+
+/**
+ * The inverse of `project`: which point of the flat layer (-1..1, y up) is
+ * shown at a canvas point. A tilted plane seen in perspective is a
+ * homography, so this solves two linear equations.
+ */
+export function unproject(
+  pose: Pose,
+  aspect: number,
+  qx: number,
+  qy: number,
+  fit = 1,
+) {
+  const [ax, ay, az] = rotate(pose, aspect, 0, 0);
+  const [bx, by, bz] = rotate(pose, 0, 1, 0);
+  const d = cameraDistance(pose.perspective, aspect),
+    k = fit * d * pose.scale,
+    ox = fit * d * ((pose.offsetX / 100) * 2),
+    oy = fit * d * ((pose.offsetY / 100) * 2);
+  // qx·(d − z) = k·x/aspect + ox and qy·(d − z) = k·y − oy, with x, y, z
+  // linear in the layer point (px, py).
+  const a11 = -qx * az - (k * ax) / aspect,
+    a12 = -qx * bz - (k * bx) / aspect,
+    b1 = ox - qx * d;
+  const a21 = -qy * az - k * ay,
+    a22 = -qy * bz - k * by,
+    b2 = -oy - qy * d;
+  const det = a11 * a22 - a12 * a21;
+  return {
+    x: (b1 * a22 - a12 * b2) / det,
+    y: (a11 * b2 - b1 * a21) / det,
   };
 }
 

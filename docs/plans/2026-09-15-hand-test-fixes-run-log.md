@@ -239,3 +239,33 @@ Commit (9b–9d): `974aafb`.
 - When no click is within 10 s and no pointer sample precedes the burst, the first recorded point (or the centre) is used; coordinates are clamped to the frame.
 - A click that sits inside removed footage can still be the aim for a later burst (its position is still where the field is); only the timing of moments inside cuts is dropped.
 
+Commit: `9d3791c`.
+
+## Slice 11: Focus dot, aim view and Alt-drag tilt (R3, R6, D8)
+
+### 11a: Dot and aim view
+
+**Shipped:** new `src/aim.ts`: `toPreview`/`fromPreview` (recording point ↔ preview pixel through the 2D camera, crop and, for 3D, the same projection and fit as slice 6), `focusAt` (active keyframe at the playhead, else the zoom's point), `aimZoom` (moves that keyframe; keyframe 0 also moves the zoom's own point), `zoomArea` (clamped like `clampCenter`). `perspective.ts` gains `unproject` (exact inverse: a tilted plane in perspective is a homography, so it's a 2×2 solve). In App, a selected zoom shows a peach **focus dot** on the preview (hidden while playing). Pressing it opens **aim view** until release: the preview renders the flat, unzoomed, uncropped frame (a project copy with one shared empty zoom list, so its camera path stays cached), a rectangle shows the zoom's area with the rest dimmed, faint ghost rings mark every other zoom's focus points, and dragging moves dot and rectangle; release commits one undo step (nothing if it didn't move). Wheel over the dot or in aim view: ±0.05× per notch within 1.05–4, one undo step per burst (gesture key). Editing an automatic zoom this way takes ownership (copied into `p.zooms` with the same id), via one `editZoom` helper.
+
+### 11b: Alt-drag tilt
+
+**Shipped:** with a 3D zoom selected, **Alt+drag** on the preview sets tiltY from horizontal and tiltX from vertical motion at 0.25°/px, **Alt+Shift+drag** sets tiltZ, **Alt+wheel** changes the field of view ±2° per notch; all clamped to the slider ranges, live, one undo step per gesture. `Zoom.manualTilt?: boolean` is set by Alt-drag, the tilt sliders and the tilt presets; `buildPath` uses the zoom's own tilt when `manualTilt` is set, while cursor-follow panning continues; MotionPanel shows the tilt sliders for such zooms. `.studio` import validates `manualTilt`. Alt+drag on a 2D zoom shows "Switch this zoom to 3D to tilt it." once per session.
+
+**Electron menu bar:** `autoHideMenuBar: false` plus `mainWindow.setMenuBarVisibility(false)`. The default menu, and so its accelerators, stays; only the Alt toggle (which exists only for auto-hide bars) is gone.
+
+**Verification:**
+- Probe before the fix (`webContents.sendInputEvent` Alt press/release): menu bar became **visible** and the content area moved from y 23 to 49 (1370 → 1344 px tall). Playwright's own `keyboard.press("Alt")` did *not* reproduce it (CDP key events skip that path), so the Electron test uses `sendInputEvent`. After the fix: menu hidden, bounds unchanged.
+- Unit tests: `src/aim.test.ts` 7 tests (projection inverse to 1e-9 for three poses including ±40/±40/±30, offsets ±60, FOV 25/75; flat mapping; 2D camera centres the focus at 2× and round-trips; 3D mapping differs from 2D by > 5 px and round-trips to 1e-6; active keyframe; keyframe editing and clamping; zoom area clamping). New camera test failed first (tilt 12° overridden to −8.64° by the cursor), then passed: `manualTilt` holds 12/−25/4° while `cameraAt` panning is identical to the following zoom. `npm test` 16 files, **115 passed**.
+- `node tests/focus-dot.mjs` PASS: dot centre (613.89, 355.95) vs expected (613.89, 355.97) from `toPreview` on the saved project; drag +80/+40 px → aim view with the area rectangle and 1 ghost ring (`tests/aim-view.png` checked: flat frame, dimmed outside, dot, ghost) → Focus X/Y 44/51 (expected 43.99/51.18) → one Ctrl+Z → 30/40; three wheel notches over the dot 1.8 → 1.95× → one Ctrl+Z → 1.8; Alt+drag +40/−16 px on a 3D zoom → tilt 28°/−14° → one Ctrl+Z → 18°/−10°; Alt+wheel two notches → field of view 49° → one Ctrl+Z → 45°; Alt+drag on the 2D zoom → hint toast once, second Alt+drag no toast; 0 page errors.
+- `node tests/alt-tilt.mjs` PASS (Electron, `sendInputEvent`): Alt press → menu hidden, content bounds identical; Alt+drag 80 px → tilt 38°, still no menu and identical bounds; Ctrl+A, Ctrl+V into the project name → "Pasted by test"; Ctrl+Shift+I → DevTools opened (then closed).
+- `npm run build` OK; `browser-smoke`, `a1-playback`, `editor-interactions`, `scrub-frames`, `3d-fit`, `timeline-resize`, `cutting`, `v2-visual`, `export-location` PASS; `v2-proof` PASS (2.14 / 15.33).
+- `node tests/a3-export.mjs`: correctness passed on both runs (3600 frames, difference 2.21, 480 frames, pitch 439/440.7, gap+ripple 270 frames, desktop 3600 frames, files 2 → 1); the speed budget failed at **32.4 s** and **30.27 s** (desktop 28.3 s / 43.6 s) with the machine busy again. See slice 9's A/B for why this is load, not code; re-run in slice 12.
+
+**Deviations / judgment calls:**
+- **Test adjusted, assertion unchanged:** slice 1's "clicking the preview deselects" check clicked the exact centre, which is now where the selected zoom's focus dot sits (pressing the dot rightly doesn't deselect). The click moved to 15%/20% of the preview.
+- In aim view the dot follows pointer *movement* from where the focus sits in the flat frame (it jumps there when aim view opens), rather than snapping under the pointer.
+- The dot is hidden during playback (its position isn't recomputed per frame).
+- Ghost dots show every other zoom's focus keyframes (or its point if it has none); in the test only one other zoom remains because the new hand zoom absorbs the sample's click at 5 s.
+- Wheel direction: wheel up zooms in (+0.05×) and widens the field of view (+2°). Alt-drag direction: dragging down raises tiltX, dragging right raises tiltY ("grab the card").
+- Mid-drag Shift switches between tilt and rotation relative to where the drag started.
+

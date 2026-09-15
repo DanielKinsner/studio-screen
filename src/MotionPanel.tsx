@@ -154,13 +154,17 @@ export default function MotionPanel({
                 }
                 onChange={(follow) => update({ follow })}
               />
-              {z.follow === false || (!p.demo && !p.points.length) ? (
+              {z.follow === false ||
+              z.manualTilt ||
+              (!p.demo && !p.points.length) ? (
                 <>
                   <div className="tilt-presets">
                     {tiltPresets.map((v) => (
                       <button
                         key={v.name}
-                        onClick={() => update({ ...v.value, follow: false })}
+                        onClick={() =>
+                          update({ ...v.value, follow: false, manualTilt: true })
+                        }
                       >
                         <span
                           style={{
@@ -177,7 +181,7 @@ export default function MotionPanel({
                     max={40}
                     value={z.tiltX ?? -10}
                     unit="°"
-                    onChange={(tiltX) => update({ tiltX })}
+                    onChange={(tiltX) => update({ tiltX, manualTilt: true })}
                   />
                   <Slider
                     label="Tilt left / right"
@@ -185,7 +189,7 @@ export default function MotionPanel({
                     max={40}
                     value={z.tiltY ?? 18}
                     unit="°"
-                    onChange={(tiltY) => update({ tiltY })}
+                    onChange={(tiltY) => update({ tiltY, manualTilt: true })}
                   />
                   <Slider
                     label="Rotation"
@@ -193,7 +197,7 @@ export default function MotionPanel({
                     max={30}
                     value={z.tiltZ ?? -2}
                     unit="°"
-                    onChange={(tiltZ) => update({ tiltZ })}
+                    onChange={(tiltZ) => update({ tiltZ, manualTilt: true })}
                   />
                 </>
               ) : (

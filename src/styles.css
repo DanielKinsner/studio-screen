@@ -416,6 +416,57 @@ p {
   max-width: 100%;
   height: 100%;
 }
+/* The focus dot of the selected zoom, and aim view while it's pressed. */
+.preview-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.focus-dot {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  margin: -12px 0 0 -12px;
+  border-radius: 50%;
+  border: 2px solid #fff8f0;
+  background: #eda888d9;
+  box-shadow:
+    0 0 0 1px #00000070,
+    0 3px 10px #0009;
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+  z-index: 2;
+}
+.focus-dot::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  background: #fff8f0;
+}
+.focus-dot:hover {
+  background: #eda888;
+  transform: scale(1.08);
+}
+.preview-overlay.aiming .focus-dot {
+  cursor: grabbing;
+}
+.aim-area {
+  position: absolute;
+  border: 2px solid #eda888;
+  border-radius: 3px;
+  box-shadow: 0 0 0 100vmax #11141666;
+}
+.ghost-dot {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  border: 2px solid #fff8f0a6;
+  background: #ffffff2e;
+}
 .preview-frame canvas {
   display: block;
   width: 100%;

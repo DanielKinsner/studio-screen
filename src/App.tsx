@@ -82,7 +82,8 @@ import {
   AudioExtras,
   TimelineEdits,
 } from "./EditorPanels";
-import type { DesktopSource, Project, Settings } from "./types";
+import type { DesktopSource, Project, Settings, Zoom } from "./types";
+import { aimZoom, focusAt, toPreview, zoomArea, type View } from "./aim";
 import {
   autoZooms,
   clamp,
@@ -93,7 +94,7 @@ import {
   parseSrt,
   timecode,
 } from "./timeline";
-import { dimensions, renderFrame } from "./compositor";
+import { cardRect, dimensions, renderFrame } from "./compositor";
 import { exportProject, type ExportFormat } from "./exporter";
 import { nativeCapture } from "./nativeCapture";
 import {
@@ -127,6 +128,14 @@ const tabs = [
   { id: "annotations", label: "Annotate", icon: Type },
 ];
 const uid = () => crypto.randomUUID();
+/** No zooms, one array forever, so the flat view's camera path stays cached. */
+const NO_ZOOMS: Zoom[] = [];
+/** Aim view: the whole recording, unzoomed, untilted and uncropped. */
+const flatView = (p: Project): Project => ({
+  ...p,
+  zooms: NO_ZOOMS,
+  settings: { ...p.settings, autoZoom: false, crop: 0 },
+});
 /** The timeline's collapsed axis for a project (ripple cuts take no width). */
 const axisFor = (p: Project): Axis => ({
   total: Math.max(1e-6, timelineDuration(p)),
@@ -317,6 +326,34 @@ export default function App() {
     target: MenuTarget;
   } | null>(null);
   const tracksRef = useRef<HTMLDivElement>(null);
+  // Focus dot and aim view: pressing the dot shows the flat frame with the
+  // zoom's area and every other zoom's focus as a ghost; release commits.
+  const [aim, setAim] = useState<{
+    id: string;
+    key: number;
+    x: number;
+    y: number;
+  } | null>(null);
+  const aimDrag = useRef<{
+    clientX: number;
+    clientY: number;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const tiltDrag = useRef<{
+    id: string;
+    pointer: number;
+    clientX: number;
+    clientY: number;
+    tiltX: number;
+    tiltY: number;
+    tiltZ: number;
+  } | null>(null);
+  const tiltHint = useRef(false);
+  const frameRef = useRef<HTMLDivElement>(null);
+  const wheelRef = useRef<(e: WheelEvent) => void>(() => {});
   const canvas = useRef<HTMLCanvasElement>(null);
   const video = useRef<HTMLVideoElement | null>(null);
   // The paused preview holds its last good picture while seeks land, and
@@ -354,6 +391,7 @@ export default function App() {
   }, []);
   const s = project.settings;
   const previewSize = usePreviewSize(canvas, s.aspect);
+  const aiming = aim !== null;
   const duration = outputDuration(project);
   const notify = useCallback((value: string) => {
     setToastAction(null);
@@ -388,6 +426,35 @@ export default function App() {
   );
   const setting = <K extends keyof Settings>(key: K, value: Settings[K]) =>
     edit((p) => ({ ...p, settings: { ...p.settings, [key]: value } }));
+  /** Change one zoom; editing an automatic zoom takes ownership of it. */
+  const editZoom = useCallback(
+    (id: string, change: (z: Zoom) => Zoom, gesture?: string) =>
+      edit(
+        (p) => {
+          const owned = p.zooms.find((v) => v.id === id);
+          const base = owned ?? autoZooms(p).find((v) => v.id === id);
+          if (!base) return p;
+          const next = change(base);
+          return {
+            ...p,
+            zooms: owned
+              ? p.zooms.map((v) => (v.id === id ? next : v))
+              : [...p.zooms, next],
+          };
+        },
+        { gesture },
+      ),
+    [edit],
+  );
+  // Wheel over the focus dot (or in aim view) changes magnification; Alt+wheel
+  // changes a 3D zoom's field of view. Native listener: it must cancel scrolling.
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame) return;
+    const wheel = (e: WheelEvent) => wheelRef.current(e);
+    frame.addEventListener("wheel", wheel, { passive: false });
+    return () => frame.removeEventListener("wheel", wheel);
+  }, []);
   const undo = useCallback(() => {
     const previous = history.current.undo(stateRef.current);
     if (previous) {
@@ -554,7 +621,7 @@ export default function App() {
       Object.assign(canvas.current, previewSize);
     if (playingRef.current) return;
     try {
-      renderFrame(canvas.current, project, time, {
+      renderFrame(canvas.current, aiming ? flatView(project) : project, time, {
         ...hold.current.media(video.current),
         background: background.current,
       });
@@ -564,7 +631,7 @@ export default function App() {
         (e as Error).message + " Choose Classic zoom if 3D is unavailable.",
       );
     }
-  }, [project, time, mediaVersion, s.aspect, previewSize, notify]);
+  }, [project, time, mediaVersion, s.aspect, previewSize, notify, aiming]);
   useEffect(() => {
     if (!playing) seeker.current?.seek(time);
   }, [time, playing, mediaVersion]);
@@ -1368,6 +1435,59 @@ export default function App() {
       restoreItem,
     ];
   };
+  const selectedZoom = autoZooms(project).find((z) => z.id === selected);
+  const is3dZoom = (z: Zoom) => (z.mode || s.motionMode) === "3d";
+  const view: View = {
+    width: previewSize.width,
+    height: previewSize.height,
+    card: cardRect(previewSize.width, previewSize.height, project, {
+      video: video.current,
+    }),
+  };
+  const percentOf = (pt: { x: number; y: number }) => ({
+    left: `${(pt.x / view.width) * 100}%`,
+    top: `${(pt.y / view.height) * 100}%`,
+  });
+  const focusDot =
+    selectedZoom && !playing
+      ? (() => {
+          const aimed = aim?.id === selectedZoom.id ? aim : null;
+          const f = aimed ?? focusAt(selectedZoom, time);
+          return {
+            f,
+            key: aimed ? aimed.key : focusAt(selectedZoom, time).key,
+            at: toPreview(project, time, f.x, f.y, view, !!aimed),
+          };
+        })()
+      : null;
+  wheelRef.current = (e) => {
+    const z = selectedZoom;
+    const notch = Math.sign(-e.deltaY);
+    if (!z || playingRef.current || !notch) return;
+    if (e.altKey) {
+      if (!is3dZoom(z)) return;
+      e.preventDefault();
+      editZoom(
+        z.id,
+        (v) => ({
+          ...v,
+          perspective: clamp((v.perspective || 45) + 2 * notch, 25, 75),
+        }),
+        `fov:${z.id}`,
+      );
+      return;
+    }
+    if (!aim && !(e.target as HTMLElement).closest(".focus-dot")) return;
+    e.preventDefault();
+    editZoom(
+      z.id,
+      (v) => ({
+        ...v,
+        scale: clamp(Math.round((v.scale + 0.05 * notch) * 100) / 100, 1.05, 4),
+      }),
+      `scale:${z.id}`,
+    );
+  };
   const shown = draft ?? project;
   const axis = axisFor(shown);
   const clipProps = {
@@ -1538,7 +1658,58 @@ export default function App() {
             <div className="preview-halo" />
             <div
               className={`preview-frame ${chosenAnnotation ? "targeting" : ""}`}
+              ref={frameRef}
               style={{ aspectRatio: s.aspect.replace(":", "/") }}
+              onPointerDown={(e) => {
+                // Alt+drag tilts the selected 3D zoom (Alt+Shift rotates it).
+                const z = selectedZoom;
+                if (!e.altKey || e.button !== 0 || !z || playing) return;
+                e.stopPropagation();
+                e.preventDefault();
+                if (!is3dZoom(z)) {
+                  if (!tiltHint.current) {
+                    tiltHint.current = true;
+                    notify("Switch this zoom to 3D to tilt it.");
+                  }
+                  return;
+                }
+                e.currentTarget.setPointerCapture(e.pointerId);
+                tiltDrag.current = {
+                  id: z.id,
+                  pointer: e.pointerId,
+                  clientX: e.clientX,
+                  clientY: e.clientY,
+                  tiltX: z.tiltX ?? -10,
+                  tiltY: z.tiltY ?? 18,
+                  tiltZ: z.tiltZ ?? -2,
+                };
+              }}
+              onPointerMove={(e) => {
+                const d = tiltDrag.current;
+                if (!d) return;
+                const dx = (e.clientX - d.clientX) * 0.25,
+                  dy = (e.clientY - d.clientY) * 0.25;
+                editZoom(
+                  d.id,
+                  (v) => ({
+                    ...v,
+                    manualTilt: true,
+                    ...(e.shiftKey
+                      ? { tiltZ: clamp(d.tiltZ + dx, -30, 30) }
+                      : {
+                          tiltY: clamp(d.tiltY + dx, -40, 40),
+                          tiltX: clamp(d.tiltX + dy, -40, 40),
+                        }),
+                  }),
+                  `tilt:${d.id}:${d.pointer}`,
+                );
+              }}
+              onPointerUp={() => {
+                tiltDrag.current = null;
+              }}
+              onPointerCancel={() => {
+                tiltDrag.current = null;
+              }}
               onClick={(e) => {
                 const r = e.currentTarget.getBoundingClientRect();
                 const x = clamp((e.clientX - r.left) / r.width, 0, 1),
@@ -1553,6 +1724,96 @@ export default function App() {
               }}
             >
               <canvas ref={canvas} aria-label="Composited video preview" />
+              {focusDot && selectedZoom && (
+                <div className={`preview-overlay ${aim ? "aiming" : ""}`}>
+                  {aim &&
+                    (() => {
+                      const area = zoomArea(aim.x, aim.y, selectedZoom.scale);
+                      const a = toPreview(project, time, area.left, area.top, view, true),
+                        b = toPreview(
+                          project,
+                          time,
+                          area.left + area.width,
+                          area.top + area.height,
+                          view,
+                          true,
+                        );
+                      return (
+                        <div
+                          className="aim-area"
+                          style={{
+                            ...percentOf(a),
+                            width: `${((b.x - a.x) / view.width) * 100}%`,
+                            height: `${((b.y - a.y) / view.height) * 100}%`,
+                          }}
+                        />
+                      );
+                    })()}
+                  {aim &&
+                    autoZooms(project)
+                      .filter((z) => z.id !== aim.id)
+                      .flatMap((z): { x: number; y: number }[] =>
+                        z.focus?.length ? z.focus : [z],
+                      )
+                      .map((f, i) => (
+                        <span
+                          key={i}
+                          className="ghost-dot"
+                          style={percentOf(
+                            toPreview(project, time, f.x, f.y, view, true),
+                          )}
+                        />
+                      ))}
+                  <button
+                    className="focus-dot preview-control"
+                    aria-label="Focus point"
+                    title="Drag to aim this zoom · scroll to change magnification"
+                    style={percentOf(focusDot.at)}
+                    onPointerDown={(e) => {
+                      if (e.button !== 0 || e.altKey) return;
+                      e.stopPropagation();
+                      e.preventDefault();
+                      e.currentTarget.setPointerCapture(e.pointerId);
+                      const box = frameRef.current!.getBoundingClientRect();
+                      aimDrag.current = {
+                        clientX: e.clientX,
+                        clientY: e.clientY,
+                        x: focusDot.f.x,
+                        y: focusDot.f.y,
+                        width: (view.card.fw / view.width) * box.width,
+                        height: (view.card.fh / view.height) * box.height,
+                      };
+                      setAim({
+                        id: selectedZoom.id,
+                        key: focusDot.key,
+                        x: focusDot.f.x,
+                        y: focusDot.f.y,
+                      });
+                    }}
+                    onPointerMove={(e) => {
+                      const d = aimDrag.current;
+                      if (!d) return;
+                      const x = clamp(d.x + (e.clientX - d.clientX) / d.width, 0, 1),
+                        y = clamp(d.y + (e.clientY - d.clientY) / d.height, 0, 1);
+                      setAim((a) => a && { ...a, x, y });
+                    }}
+                    onPointerUp={(e) => {
+                      const d = aimDrag.current;
+                      aimDrag.current = null;
+                      if (!d || !aim) return setAim(null);
+                      const x = clamp(d.x + (e.clientX - d.clientX) / d.width, 0, 1),
+                        y = clamp(d.y + (e.clientY - d.clientY) / d.height, 0, 1);
+                      if (x !== d.x || y !== d.y)
+                        editZoom(aim.id, (z) => aimZoom(z, aim.key, x, y));
+                      setAim(null);
+                    }}
+                    onPointerCancel={() => {
+                      aimDrag.current = null;
+                      setAim(null);
+                    }}
+                  />
+                </div>
+              )}
               {busy && !recording && (
                 <div className="preview-loading">
                   <LoaderCircle className="spin" size={24} />

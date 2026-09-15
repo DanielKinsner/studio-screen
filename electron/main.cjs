@@ -365,7 +365,10 @@ app.whenReady().then(() => {
     show: false,
     title: "Studio Screen",
     backgroundColor: "#1d1f21",
-    autoHideMenuBar: true,
+    // Alt is an editing modifier (Alt+drag tilts a 3D zoom), so it must never
+    // reveal the menu bar. An auto-hide menu bar toggles on Alt; a hidden one
+    // doesn't, and its shortcuts (copy/paste, reload, devtools) still work.
+    autoHideMenuBar: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -374,6 +377,7 @@ app.whenReady().then(() => {
       backgroundThrottling: false,
     },
   });
+  mainWindow.setMenuBarVisibility(false);
   // Zoom is applied only once the window is showing: setting it earlier stops
   // Electron from ever reporting the page as ready to show.
   const applyZoom = () =>

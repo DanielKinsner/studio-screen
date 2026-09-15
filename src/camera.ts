@@ -120,7 +120,9 @@ function buildPath(p: Project): Path {
     target[CENTER_Y] = clampCenter(centerY, scale);
     if (!is3d) return;
     const amount = s.motionIntensity;
-    if (pointer) {
+    // A tilt set by hand (slider or Alt-drag) wins over cursor-follow tilt;
+    // cursor-follow panning above still applies.
+    if (pointer && !z.manualTilt) {
       target[TILT_X] = (pointer.y - 0.5) * amount * 1.6;
       target[TILT_Y] = -(pointer.x - 0.5) * amount * 1.6;
     } else {

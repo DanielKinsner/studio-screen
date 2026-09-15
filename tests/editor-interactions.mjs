@@ -62,9 +62,10 @@ try {
   const preview = await page
     .getByLabel("Composited video preview")
     .boundingBox();
+  // Away from the selected zoom's focus dot, which sits near the centre.
   await page.mouse.click(
-    preview.x + preview.width * 0.5,
-    preview.y + preview.height * 0.5,
+    preview.x + preview.width * 0.15,
+    preview.y + preview.height * 0.2,
   );
   await deselected("Clicking the preview");
   results.deselect = { zoomCount, playhead: +playhead.toFixed(1) };
