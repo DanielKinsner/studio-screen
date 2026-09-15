@@ -1,44 +1,104 @@
 # Status — Studio Screen
 
-**Last updated:** 2026-09-14 (verification complete; paused for hand test / machine transfer)
+**Last updated:** 2026-09-15 (0.4.0 built with every hand-test fix; ready for Dan's hand test)
 
 ## Where things stand
 
-Option A is built and pushed: a readability pass, then phases A1 (smooth camera and cursor), A2 (recording gets out of the way), A3 (frame-by-frame export), A4 (Rust capture helper) and A5 (auto-edit on stop). Spec: [docs/SPEC.md](docs/SPEC.md). What was built: [docs/PLAN.md](docs/PLAN.md). Evidence and gaps: [VALIDATION.md](VALIDATION.md).
+All 12 slices of [the hand-test fix plan](docs/plans/2026-09-15-hand-test-fixes-execution-plan.md) are built, tested and pushed, and **`release/Studio Screen 0.4.0.exe`** is packed on the office PC. Every judgment call, deviation and measurement is in [the run log](docs/plans/2026-09-15-hand-test-fixes-run-log.md). Background: [docs/SPEC.md](docs/SPEC.md), [VALIDATION.md](VALIDATION.md).
 
-| Phase | Verified by running it | Still unverified |
+What changed since 0.3.0, in Dan's words from the first hand test:
+
+| # | Dan's report | Now |
 |---|---|---|
-| Readability | Screenshots at 4K/150% and laptop size; browser tests | Dan's eyes |
-| A1 camera & cursor | Unit tests; 60 fps preview on a 10-min 3D project; playback test | Which camera feel Dan likes |
-| A2 recording UI | Native test passed: protected marker 0 pixels, control 1,071; countdown, hidden editor and restored focus | Dan's hand test |
-| A3 export | Latest browser 60 s 1080p60 in 28.1 s; minimized desktop 30.5 s; exact frames, pitch and cancellation passed | 4K60 export speed; launching the packaged app |
-| A4 capture helper | Full native suite passed at 150% scaling: 1.26 px clicks, full input events, −7 ms A/V; six-flash sync mean −5 ms; helper/app crash recovery passed (472 ms helper exit); five-minute 1440p60 soak passed (106–107 MB) | Separate 30-minute/4K soak; Dan's hand test |
-| A5 auto-edit | Five-minute synthetic take: auto-edit 357 ms, first frame 737 ms, saved 1,552 ms; test passed after fixing its autosave race | Dan's hand test |
+| R8 | Can't deselect a clip | Click empty timeline, the preview, or press Esc |
+| R7 | Undo on a slider goes 0.05 at a time | One Ctrl+Z undoes a whole drag (200 steps kept) |
+| R4 | Scrubbing turns the preview white | Holds the last frame while the next one loads |
+| R10 | Fast clicks: camera slow to react | Heads for the next click early instead of waiting for the pointer |
+| R5 | Zooms should start earlier | **Zoom lead** slider, default +0.5 s (Smooth now starts 1.04 s before a click) |
+| R2 | 3D at padding 0 crops the picture | 3D zooms shrink just enough to keep all four corners in frame |
+| R12 | Choose where exports go | Save As every time (remembers the folder); **Ctrl+E** skips it |
+| R11 | Bigger timeline | Drag the line above the timeline; double-click resets |
+| R9 | Cut like Premiere | Ctrl+K split, C razor, gaps, ripple delete, restore, snapping, right-click menus |
+| R1 | Zoom while typing? | Automatic dashed zooms on bursts of typing (toggle under Automatic zoom) |
+| R6 | Focus dot instead of X/Y sliders | Drag the dot on the preview; aim view shows the area and other zooms |
+| R3 | Grab the screen to tilt 3D | Alt+drag tilts, Alt+Shift+drag rotates, Alt+scroll = field of view |
 
-### Current verification: sync and native end-to-end passed
+| Area | Verified by running it | Still unverified |
+|---|---|---|
+| Deselect, undo | `editor-interactions` browser test (fails before, passes after); 8 history unit tests | Dan's feel for keyboard-arrow undo |
+| Scrubbing | `scrub-frames`: empty card on 128 of 307 frames before, 0 of 326 after; paused frame matches | Long native recordings at 4K |
+| Camera lead and fast clicks | Unit tests: 99% of the way to the second click by the time it happens; video always opens unzoomed | Which lead feels right |
+| 3D fit | `3d-fit`: 1,024 card pixels on the frame edge before, 0 after, at default and maximum tilt | Dan's eyes on real recordings |
+| Export location | `export-location` (desktop app): Save As, remembered folder, quiet cancel, Ctrl+E, a failed export leaves the old file untouched | The real Windows dialog by hand |
+| Timeline size | `timeline-resize` at 1920×1080 and 1366×768; resting look pixel-identical | 4K at 150% |
+| Cutting | 16 edit unit tests; `cutting` browser test (split, gap, ripple, restore, razor, snapping, edge drags, one-step undo); A3 exports a gap + ripple with exactly 270 frames for 9 s | Real recordings; whether the fit-to-width timeline feels right |
+| Typing zoom | 7 unit tests; A5 toast shows typing zooms ("36 zooms") | Taste |
+| Focus dot, Alt tilt | 7 mapping unit tests; `focus-dot` browser test; `alt-tilt` desktop test (the menu bar no longer appears on Alt) | Feel |
+| Build | 0.4.0 portable packed; bundled helper hash matches; packaged smoke passes on the portable and unpacked app (footer shows v0.4.0) | — |
+| Native capture | `native:check` all ✔; A2 passed (0 bar pixels vs 1,069 control); A5 passed (386 ms auto-edit, 845 ms first frame); A4 clicks 0.5 px, cursor 0 px, crash recovery passed | **A/V sync: see heads-up below** |
 
-Setup, five native capability checks, 65 JavaScript tests, production build, browser smoke, A3, native A2 and A5 passed. After filling short PCM gaps in the helper, the plain six-flash sync test passed: **−13, +8, +1, −12, −8 ms; mean −5 ms**. The −49 ms negative control measured **−51 ms mean** and failed. The app correctly retains zero offset; the original +49 ms calibration does not apply here.
+### Heads-up: three things the run could not close
 
-The native end-to-end suite now passes on the 150% secondary display: **1.26 px** click error, full input events, **−7 ms** sync, zero cursor pixels versus 234 in the control, and both crash-recovery assertions. The test injector needed per-monitor thread DPI awareness. A2 rerun passed (0 protected marker pixels; 1,071 control); A5 rerun passed (357 ms auto-edit, 737 ms first frame, 1,552 ms saved). The final five-minute soak passed: 308.165 s, 18,490 frames, 2560×1440 at 60 fps, 106–107 MB settled memory. The retry queue has exited. See [VALIDATION.md](VALIDATION.md).
+1. **Sound measured ~57 ms late today.** The helper's own sync test (`tests/a4-av-sync.mjs`) measured 75, 51, 53, 58, 47 ms, and A4's single-flash check measured 66 then 58 ms (limit 20). Yesterday the same test measured −5 ms. **Nothing in this run touched capture:** that test runs the unchanged helper directly with its own fixture. Premiere Pro, Discord, Chrome and Spotify were open at the time. No offset was added (as the plan requires). Check it in the hand test below (step 13); a follow-up task is queued to investigate.
+2. **A3 export speed is load-sensitive.** Every A3 run passed on correctness (exact frames, audio, pitch, cancel). The 60 s export beat its 30 s budget in five runs (20.5–25.9 s) and missed it in others (30–40 s) while Codex and Premiere were loading the PC. A side-by-side of old and new code showed the same spread (23–49 s), so it isn't a slowdown from this work.
+3. **`tests/desktop-capture.mjs` has been stale since 9/14** (before this run): it expects the pre-auto-edit toast and browser downloads. Only its folder settings were changed so it can't touch real data; a follow-up task is queued to repair it.
 
-### 2026-09-15: Dan's first hand test (0.3.0) → fix plan ready
+## Dan's hand test for 0.4.0
 
-The 0.3.0 portable (`release/Studio Screen 0.3.0.exe`) was built with a freshly rebuilt helper; the bundled helper hash matched, and the packaged app launched. Dan recorded and exported two videos at **4K60: clean, audio good**. He found 12 issues and requests: white frames while scrubbing, undo on sliders, deselect, slow camera on fast clicks, zoom lead, 3D cropping at zero padding, export location, timeline size, Premiere-style cutting, a focus dot, 3D grab-to-tilt, and typing zoom.
+Run `release\Studio Screen 0.4.0.exe` on the office PC (on another PC: `npm run desktop:pack` first). It opens your existing library; older projects load fine. For the sync check in step 13, close Premiere, Discord and Spotify first.
 
-**Next: run [docs/plans/2026-09-15-hand-test-fixes-execution-plan.md](docs/plans/2026-09-15-hand-test-fixes-execution-plan.md) in one long session.** Every decision is locked there, and it ends by packing 0.4.0 with a new hand test. The older steps below are superseded where they conflict.
+1. **Record a take.** New recording → your main display → Start. During the take:
+   - Click something top-left, then something bottom-right within a second.
+   - Click into a text field and type a sentence, then keep typing for a few seconds.
+   - Clap or play something with sharp sounds that also moves on screen (for step 13).
+   - Finish. The toast says "Auto-edit: … zooms …".
+2. **Scrub.** Drag quickly back and forth along the time ruler. The preview should never flash white or empty; it holds the last picture and lands on the right frame when you let go.
+3. **Fast clicks.** Play the part with the two quick clicks. The camera should already be sliding toward the bottom-right before that click lands, not after.
+4. **Typing zoom.** On the Zoom track there's a dashed clip over your typing that starts about a second before you typed and aims at the field you clicked. The click-then-type part stays zoomed in the whole time. Hover the clip and click × to remove it. Focus & 3D → Automatic focus & animation → **Zoom while typing** off: typing zooms disappear; turn it back on.
+5. **Zoom lead.** Same panel → **Camera spring** → **Zoom lead** reads 0.5 s, with a line "Automatic zooms start moving 1.04 s before each click" (Smooth). Try 0 s and 1 s while playing a click. Pick Snappy or Floaty: Zoom lead keeps its value.
+6. **Deselect and undo.**
+   - Click a zoom clip, then empty timeline space: the inspector no longer shows "Selected focus", and Delete does nothing. Same with Esc, or clicking a corner of the preview.
+   - Select a zoom and drag **Magnification** far. One Ctrl+Z puts it back where it started.
+7. **Focus dot.** Click a zoom clip: a peach dot sits on the preview.
+   - Press and hold it: the preview shows the whole recording, an orange box shows what the zoom will show, faint rings mark the other zooms.
+   - Drag, let go: the zoom now aims there. One Ctrl+Z undoes it.
+   - Scroll over the dot: magnification changes.
+8. **3D.**
+   - Canvas → Padding **0**. Focus & 3D → Add 3D zoom → drag the tilt sliders to the ends. All four corners of the recording stay inside the frame.
+   - Hold **Alt** and drag on the preview: it tilts. **Alt+Shift**+drag rotates; **Alt**+scroll changes field of view. The menu bar never appears. One Ctrl+Z undoes a whole drag.
+   - On a 2D zoom, Alt+drag shows "Switch this zoom to 3D to tilt it." once.
+9. **Timeline size.** Hover the line just above the timeline toolbar and drag up: the timeline and its rows get taller and the preview shrinks. Quit and reopen: the height is kept. Double-click the line: back to normal.
+10. **Cutting.** On the Screen track:
+    1. Put the playhead somewhere and press **Ctrl+K**, then again elsewhere: three pieces with thin dividers.
+    2. Click the middle piece → **Delete**: a hatched gap stays. Play: it's skipped and the duration drops.
+    3. Click the gap → **Delete**: it closes up, everything after slides left, and a small red marker shows where it was (hover for "Removed … s").
+    4. Right-click the marker → **Restore footage**: it's back.
+    5. Click a piece → **Shift+Delete**: ripple delete.
+    6. Press **C**: scissors cursor and a line follow the mouse; click to split. **V** goes back.
+    7. Drag a zoom clip near a split: it jumps onto it with an orange line. Press **S** (or the magnet) and try again: no snapping.
+    8. Drag a piece's inner edge inward: a gap. Hold **Shift** while dragging: a ripple. The **Ⅱ** grips at the ends trim.
+    9. Right-click a piece: Split at playhead · Delete (leave gap) · Ripple delete.
+    10. Ctrl+Z walks back one edit at a time.
+11. **Export.**
+    - Export video → Export: Windows **Save As** opens in `Videos\Studio Screen\Exports` → choose another folder and name → "Export complete. Saved to <folder>." → **Show in folder** opens it.
+    - Export again: Save As starts in that folder. Cancel it: nothing happens and the dialog stays ready.
+    - Close the dialog, press **Ctrl+E**: saves straight into that folder with a numbered name, no dialog.
+    - Optional: export over an existing file and cancel halfway. The old file is still intact.
+12. **Play the export** (MP4 · 1080p · 60 fps): cuts, zooms and typing zooms match the editor.
+13. **Sound sync.** With Premiere, Discord and Spotify closed, play the clap/sharp-sound part of the export. Does the sound land with the picture? If you can, record once more with them open and compare.
+
+Tell me: which zoom lead feels right, whether typing zooms are welcome, how the fast-click camera feels, anything confusing about cutting, and whether sound was in sync in step 13.
 
 ## Next steps (in order)
 
-**Safe stopping point:** all requested automated checks are complete. No background capture queue remains. Real-screen videos were deleted after measurement; the final soak video/event log were confirmed absent. Earlier interrupted attempts are historical evidence, not failures of the completed soak.
+1. Dan's hand test above.
+2. Follow-up tasks queued from this run: investigate the ~57 ms A/V measurement (no offsets), and repair the stale `tests/desktop-capture.mjs`.
+3. Tune defaults from Dan's answers (zoom lead, typing zoom).
+4. Still unverified from before: the separate 30-minute/4K soak and timed 4K60 export.
 
-1. On the other PC, follow [docs/MACHINE-HANDOFF.md](docs/MACHINE-HANDOFF.md): pull main, install dependencies, rebuild the native helper and inspect every capability check. Generated binaries/profiles do not transfer through Git.
-2. Perform Dan's hand test below before any new features. The current app uses zero audio offset; do not apply the old −49 ms calibration. Destination hardware needs its own verification.
-3. The separate 30-minute/4K soak, 4K60 export speed and current packaged-app launch remain unverified; they were outside the completed five-minute verification request.
-4. Before the next portable build, bump the package version from 0.2.1 as previously planned. No new package was built for this handoff.
+## Setup on any machine
 
-## Dan's hand test (everything at once)
-
-Setup, once per machine (Rust must be installed):
+Rust must be installed. Then:
 
 ```powershell
 git pull
@@ -46,61 +106,22 @@ npm install
 npm run native:check
 ```
 
-Every line should show ✔. Then:
-
-```powershell
-npm run desktop:dev
-```
-
-1. **Readability.** Text should be comfortable. **Ctrl + =** / **Ctrl + −** sizes the whole interface, and it's remembered.
-2. **Record.** **New recording** → your main display → leave **3-second countdown** on → **Start recording**. The editor disappears, 3-2-1 shows in the middle, then a small bar appears at the bottom.
-3. **During the take.**
-   - Click something top-left, then something bottom-right within a second.
-   - Type a few words, then press **Ctrl + K**.
-   - Keep the mouse still for about 10 seconds.
-   - Open and close **speaker notes** on the bar.
-   - **Pause**, wait, **Resume**.
-4. **Finish** on the bar. Within a few seconds the editor is back with "Auto-edit: …" and a **Back to raw** button.
-5. **Play it (Space).**
-   - The start and your reach for Finish are trimmed off.
-   - There's **one** crisp cursor: an I-beam over text, a hand over links.
-   - The camera glides from the first click to the second without zooming out.
-   - Typing plays at 2× and the still stretch at 4×.
-   - The bar, countdown and notes are not in the video.
-   - Check that sound and picture stay aligned. The automated sync test now passes.
-6. **Timeline.**
-   - Automatic clips are dashed. Hover one and click **×** to remove just that edit.
-   - **Pacing → Back to raw** removes the whole automatic edit; **Apply automatic edit** brings it back.
-7. **Feel.** **Focus & 3D → Camera feel**: try Snappy and Floaty, and Bounce around 25%.
-8. **Export.**
-   - MP4 · 1080p · 60 fps. Minimize while it renders; it keeps going.
-   - **Show in folder** and play the file.
-   - **Ctrl + E** exports again with the same settings.
-9. **Crash safety (optional).** Mid-take, end **Studio Screen** in Task Manager, then relaunch. You should see "Recovered a recording…".
-10. **Window recording.** Record one app window and close that app mid-take: the take ends and opens.
-
-Tell me which camera feel is right, whether auto-trim ever cuts something you wanted, and anything slow or confusing.
-
-Recordings: `Videos\Studio Screen\<date time>\`. Exports: `Videos\Studio Screen\Exports\`.
+Every line should show ✔. `npm run desktop:dev` runs the app from source; `npm run desktop:pack` builds the portable EXE into `release/`.
 
 ## Open threads and ideas (not started)
 
-- Proposed extras, each needing a quick spec and a go:
-  - mark-a-mistake hotkey
-  - auto-zoom on typing
-  - device frames
-  - captions from system audio
-  - deleting recording folders from the library (today it only removes the library entry)
+- Parking lot from the plan: device frames, captions from system audio, mark-a-mistake hotkey, deleting recording folders from the library, recording the text caret in the helper (would improve typing-zoom aim), a true output-time timeline, right-click menus on zoom/speed/caption clips, shorter keyframe intervals in native recordings for faster seeking.
 - Known limits:
   - A window that's resized mid-take is padded or cropped to its starting size.
   - Displays wider than 4096 px are untested.
   - Custom app cursors draw as an arrow.
   - Drag gestures aren't interpreted.
-- `tests/export-formats.mjs` needs `tests/native-capture.webm`, which `tests/desktop-capture.mjs` creates. Run that first on a new machine.
+  - The timeline fits its whole length to the width, so closing a gap rescales the view instead of leaving room at the end.
+- `tests/export-formats.mjs` needs `tests/native-capture.webm`, which `tests/desktop-capture.mjs` creates (currently stale, see heads-up 3).
 
 ## Not in git (on purpose)
 
-All regenerated by tests or builds: `node_modules/`, `dist/`, `release/` (portable builds), `native/studio-capture/target/` (helper build, ~200 MB), `tests/.fake-take/` (5-minute synthetic take, rebuilt by `a5-open-speed`), test profiles and exports under `tests/.*`, generated fixture videos, and `tests/*-results.json`. Test recordings of the real screen are deleted after measuring.
+All regenerated by tests or builds: `node_modules/`, `dist/`, `release/` (portable builds), `native/studio-capture/target/` (helper build, ~200 MB), `tests/.fake-take/` (5-minute synthetic take, rebuilt by `a5-open-speed`), test profiles, recordings and exports under `tests/.*`, generated fixture videos, and `tests/*-results.json`. Test recordings of the real screen are deleted after measuring or kept only under `tests/.projects`.
 
 ## How to check the build
 

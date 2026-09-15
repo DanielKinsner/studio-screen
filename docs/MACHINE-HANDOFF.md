@@ -1,12 +1,12 @@
 # Move Studio Screen to another Windows machine
 
-Updated after completing the requested automated verification on Daniel Kinsner's checkout. All implementation and test fixes are on `main`, including short PCM-gap preservation before AAC encoding and mixed-DPI test input. Read [STATUS.md](../STATUS.md) first for the current stopping point, then [VALIDATION.md](../VALIDATION.md) for measured evidence. No new feature work or fixed audio calibration is pending in a private branch.
+Updated 2026-09-15 after the 0.4.0 hand-test fix run on Daniel Kinsner's office PC. Everything is on `main`. Read [STATUS.md](../STATUS.md) first for the current stopping point and the 0.4.0 hand test, then [VALIDATION.md](../VALIDATION.md) (section "0.4.0") for measured evidence and [the run log](plans/2026-09-15-hand-test-fixes-run-log.md) for every decision. Nothing is pending in a private branch.
 
 ## Resume here
 
-The requested automated checks passed: 65 JavaScript tests, two Rust timeline tests and the real AAC encoder regression, production build, browser smoke, A3 export, native capture/input/crash recovery, A2, A5, and the five-minute soak. Latest soak: **308.165 s at 2560×1440/60 fps, 106–107 MB settled memory**. The task's retry queue has exited and development server has been stopped.
+**Version 0.4.0.** 115 JavaScript unit tests in 16 files pass, plus the production build, browser smoke, A1 playback, the new browser tests (`editor-interactions`, `scrub-frames`, `3d-fit`, `timeline-resize`, `cutting`, `focus-dot`), the new desktop tests (`export-location`, `alt-tilt`), A2, A5 and the packaged smoke test on the 0.4.0 portable. A3's correctness passes on every run; its 30 s speed budget is load-sensitive on a busy PC.
 
-**Next is Dan's hand test after rebuilding on the destination PC. Stop before new features.** Zero audio offset passed here (six-flash mean −5 ms); −49 ms measured −51 ms and failed, so no fixed offset was added. The separate 30-minute/4K soak, 4K60 export speed and current packaged-app launch remain unverified. Do not treat this machine's measurements as destination-hardware proof.
+**Next is Dan's hand test of 0.4.0 (steps in STATUS.md).** The portable EXE exists only on the office PC; on another machine rebuild it with `npm run desktop:pack`. Open items: the capture helper's own sync test measured sound ~57 ms late on 2026-09-15 (−5 ms the day before, no helper changes; do not add an offset), and `tests/desktop-capture.mjs` is stale. The separate 30-minute/4K soak and timed 4K60 export remain unverified. Do not treat this machine's measurements as destination-hardware proof.
 
 ## Get the complete source
 
@@ -54,7 +54,7 @@ $env:ELECTRON_BUILDER_COMPRESSION_LEVEL = '3'
 npm run desktop:pack -- --config.electronDist=node_modules/electron/dist
 ```
 
-The current package version is still 0.2.1, but it contains newer code than the original 0.2.1 build. `STATUS.md` asks for a 0.3.0 version bump before the next candidate build. Do not identify an old executable solely by its filename: the other agent overwrote the original local `release/Studio Screen 0.2.1.exe`. Source and the current status document take precedence over old artifact receipts.
+The current package version is **0.4.0**; the app's footer reads it from `package.json` at build time. The office PC's `release/Studio Screen 0.4.0.exe` is 129,972,345 bytes, SHA-256 `37CD371FA2A829A669DDDD3E0D256984347591F846BCD03215E99664E8731212`. Check it with `node tests/packaged-smoke.mjs --portable` (uses a throwaway profile). Do not identify an old executable solely by its filename; source and the current status document take precedence over old artifact receipts.
 
 ## What Git does not transfer
 
@@ -74,7 +74,7 @@ On the audited machine, the standard Videos path is `C:\Users\SM - Dan\Videos`; 
 
 Read `STATUS.md` first, then `docs/SPEC.md`, `docs/PLAN.md`, and the later sections of `VALIDATION.md`. Older validation sections describe earlier versions, not the current implementation.
 
-The current evidence is summarized at the top of this guide and in STATUS.md. Earlier 61-test and pending-native notes in historical documents have been superseded by 65 JavaScript tests and the completed native verification. Vite's existing large-bundle warning remains.
+The current evidence is summarized at the top of this guide and in STATUS.md. Earlier 61- and 65-test notes in historical documents are superseded by the 115 JavaScript tests of 0.4.0. Vite's existing large-bundle warning remains.
 
 Browser tests use installed Microsoft Edge. Some media tests also need FFmpeg and ffprobe; configure your installation instead of relying on this PC's AutoPod path:
 

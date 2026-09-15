@@ -269,3 +269,50 @@ Commit: `9d3791c`.
 - Wheel direction: wheel up zooms in (+0.05×) and widens the field of view (+2°). Alt-drag direction: dragging down raises tiltX, dragging right raises tiltY ("grab the card").
 - Mid-drag Shift switches between tilt and rotation relative to where the drag started.
 
+Commit: `d3e0844`.
+
+## Slice 12: Release 0.4.0 and handoff
+
+### Version sweep (commit `f8495d8`)
+
+- `npm version 0.4.0 --no-git-tag-version` → `package.json` and `package-lock.json` at 0.4.0.
+- Search for `0.3.0` / `0.2.1` outside `node_modules`, `release`, `dist`: only historical docs, plus two real hits.
+  - **`src/App.tsx` footer hard-coded `v0.2.1`** (noted before slice 1). Now `v{__APP_VERSION__}`, injected by `vite.config.ts` from `package.json`. The built bundle contains `0.4.0`, and `packaged-smoke` asserts the footer reads `v${version}`.
+  - `native/studio-capture/Cargo.lock` lists crate version `0.2.1`: the helper's own version, not read by the app, build or tests. Left alone (section 5: no native changes).
+- **Safety (found while preparing the packaged test):** the Electron tests set a throwaway profile but not `STUDIO_PROJECTS_DIR`, so the app's launch-time recovery scanned `Videos\Studio Screen` and could have rewritten an unfinished take's `meta.json` to "recovered". Read-only check: Dan's two takes today are `done`, with `meta.json` last written 08:19 and 08:33, before this run started, so nothing was touched. `a3-export`, `export-location`, `alt-tilt`, `desktop-capture` and `packaged-smoke` now all point `STUDIO_PROJECTS_DIR` (and where relevant `STUDIO_EXPORT_DIR` / `STUDIO_USER_DATA`) at `tests/.*` folders. `packaged-smoke` previously launched with the **real profile** and added a 3D zoom to the most recent real project; it now uses `tests/.packaged/`.
+
+### Full floor on the final code
+
+- `npm test` **16 files, 115 passed**; `npm run build` OK.
+- With the dev server: `browser-smoke`, `a1-playback`, `editor-interactions`, `scrub-frames`, `3d-fit`, `timeline-resize`, `cutting`, `focus-dot`, `v2-visual` PASS; `v2-proof` PASS (2.14 / 15.33); `export-location`, `alt-tilt` PASS (Electron).
+- `node tests/a3-export.mjs` on the final code: correctness passed (3600 frames, difference 2.21, 480 frames, pitch 439/440.7, gap + ripple 270 frames, cancel, desktop files 2 → 1); speed **35.55 s** and **39.78 s** (desktop 33.7 s / 33.0 s) while Codex was running Python and Node jobs (~3.5 cores). Same load story as slices 5, 7, 9 and 11; the slice 9 A/B is the evidence it isn't the code. The last in-budget runs were slice 10 (25.1 s, 20.52 s).
+- `npm run native:check`: all five ✔ (Windows screen capture, no yellow border, screen-change tracking, NVIDIA RTX 4080 hardware H.264, system audio).
+- **Idle-gated native tests** (each started only after `tests/idle.ps1` ≥ 120 s; A4's injected input resets that clock, so I waited it out between runs):
+  - `a2-recording-ui` **PASS**: protected take 0 magenta pixels / 0 black share (11 frames); control 1,069 (15 frames); countdown seen, editor hidden, bar visible, editor visible and focused after, no leftover windows.
+  - `a5-open-speed` **PASS**: 5-minute take, auto-edit 386 ms, first frame 845 ms, saved 1,135 ms; toast "Auto-edit: 36 zooms · 10 typing speed-ups" (now counting typing zooms).
+  - `a4-native-capture` **FAILED its A/V check only**, twice: 66 ms then 58 ms (limit 20 ms). Everything else passed both times: click error 0.5 px, stray cursor 0 px (control 231/232), 6 left clicks with 47–62 ms burst gaps, right-click, wheel, Ctrl+K, 4 typing events, text/pointer shapes, helper-kill file 3.93 s, app-kill recovery ("Recovered · …", helper gone in 802/619 ms).
+  - `a4-av-sync` (to separate app from helper; it uses its own fixture window and spawns the helper directly, so no app code runs): **FAIL, sound 57 ms late** (75, 51, 53, 58, 47 ms). On 9/14 the same test measured −5 ms. The helper binary is unchanged: built 08:16 today before this run, SHA-256 `4D429A7794CAF3C863AAA20A0EC6BE9842079D8A6791D9C1E5A4CFE39BFF8828`, and `git diff babac5f HEAD -- native/` is empty. Running at the time: Premiere Pro, Discord (6 processes), Chrome, Spotify, plus Codex workloads. **Not a stop trigger in my reading:** the failure isn't caused by and can't be fixed within this run (a fix would mean helper or offset changes, which section 5 forbids and section 6.1 reserves for Dan), and no assertion was changed. Flagged as heads-up 1 in STATUS.md, added to the hand test (step 13), and queued as a follow-up task.
+  - `desktop-capture` **not passing, pre-existing:** it first timed out on "Recording ready. Make it your own." (since `cf594b2` a take ≥ 1 s shows the auto-edit toast). With that expectation temporarily relaxed, it then hung at export because it had no `STUDIO_EXPORT_DIR` and slice 7's Save As opened (closed with the test; no dialog left open). It also expects a browser download and fallback click/shortcut capture, both obsolete since A3/A4. Its last results file dates from 9/14 10:19. I reverted the toast tweak, kept only the folder isolation (including `STUDIO_EXPORT_DIR` so a real dialog can't appear), and queued a repair task instead of rewriting its assertions.
+
+### Package
+
+- `$env:ELECTRON_BUILDER_COMPRESSION_LEVEL='3'; npm run desktop:pack -- --config.electronDist=node_modules/electron/dist` → exit 0. Cargo: `Finished release … in 0.55s` (no helper rebuild). **`release/Studio Screen 0.4.0.exe`: 129,972,345 bytes, SHA-256 `37CD371FA2A829A669DDDD3E0D256984347591F846BCD03215E99664E8731212`.**
+- Bundled `release/win-unpacked/resources/studio-capture.exe` SHA-256 **equals** `native/studio-capture/target/release/studio-capture.exe` (`4D429A77…F8828`).
+- `node tests/packaged-smoke.mjs --portable` **PASS**: loaded from its extracted temp folder, footer `v0.4.0`, 3D controls, source picker, cursor tracker, system audio on, microphone controls absent, 0 page errors, no leftover processes. Verified isolation: the throwaway profile was written at 11:30; Dan's real `%APPDATA%\studio-screen` was last written at 10:07 by his own 0.3.0 session. Also PASS without `--portable` on `win-unpacked`.
+- **Plan claim that didn't match:** `packaged-smoke.mjs --portable` could not launch the portable EXE (Playwright's Electron launcher timed out after 60 s: the portable wrapper unpacks itself and starts the real app as a child it can't follow). `--portable` now starts the EXE with a free `--remote-debugging-port` and attaches with `chromium.connectOverCDP`, like the older `tests/portable-launch.mjs`, then runs the same checks; the cursor-tracker check tries each screen until the one under the pointer reports. `tests/portable-launch.mjs` was **not** run: it records the screen with the real profile and still expects the pre-auto-edit toast.
+
+### Docs
+
+- STATUS.md rewritten: where things stand (report → fix table), verified vs unverified table, three heads-ups (A/V measurement, A3 speed under load, stale desktop-capture), the **0.4.0 hand test** (13 numbered steps covering scrub, fast clicks, typing zoom, zoom lead, deselect/undo, focus dot, 3D fit and Alt tilt, timeline size, every cutting action, Save As/Ctrl+E, export playback, sound sync), next steps, parking lot.
+- VALIDATION.md: new "0.4.0 — hand-test fixes — 2026-09-15" section with the numbers above.
+- README: workflow (new keys and gestures), structure (new modules), Tests (all new scripts, packaged smoke).
+- docs/MACHINE-HANDOFF.md: version 0.4.0, artifact hash, 115 tests, open items.
+- The plan is marked "Executed" at the top with a link here.
+- Two follow-up tasks were offered to Dan in the app: investigate the ~57 ms A/V measurement (no offsets), and repair `tests/desktop-capture.mjs`.
+
+## Summary for Dan
+
+- **Shipped:** all 12 slices, 0.4.0 portable built and smoke-tested. The bug reports (R2, R4, R7, R8, R10) each have a test that failed before the fix and passes now; the feature requests (R1, R3, R5, R6, R9, R11, R12) each have new tests of their own.
+- **Needs your eyes:** the hand test in STATUS.md, especially zoom lead, typing zoom, the fast-click camera, and cutting feel.
+- **Open, not caused by this run:** the helper's sync test measured sound ~57 ms late today (was −5 ms yesterday; nothing native changed; audio apps were open). Please do hand-test step 13. `desktop-capture` is stale. A3 speed misses its budget when the PC is busy.
+- **No stop triggers fired.** No native changes, no audio offset, no real recordings, exports or profile touched (checked), no git conflicts (every pull was already up to date).

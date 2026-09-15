@@ -31,7 +31,7 @@ Portable Windows build: `npm run desktop:pack` (output in `release/`, unsigned l
 1. **New recording** → pick a display or window (optionally a custom area). System audio is on by default and records everything the PC plays.
 2. **Start recording**. Studio Screen hides, counts 3-2-1, and shows a small floating bar: pause, speaker notes, discard, finish. The bar, the countdown and the notes never appear in the video. **Ctrl+Shift+R** also finishes.
 3. On Finish the editor opens with an automatic rough cut: dead air trimmed at both ends, typing sped up 2×, waiting sped up 4×, zooms that glide between the things you clicked, and the look you used last. The toast offers **Back to raw**; automatic clips are dashed on the timeline with a × to remove any one of them.
-4. Tweak: **Focus & 3D** (Camera feel: Snappy / Smooth / Floaty, 3D angles), **Pacing** (speed sections, cuts, Back to raw / Apply automatic edit), **Canvas**, **Cursor**, **Captions**, **Annotate**.
+4. Tweak: **Focus & 3D** (Camera feel: Snappy / Smooth / Floaty, Zoom lead, Zoom while typing, 3D angles), **Pacing** (speed sections, Back to raw / Apply automatic edit), **Canvas**, **Cursor**, **Captions**, **Annotate**. On the timeline, cut like Premiere: **Ctrl+K** splits at the playhead, **C** is the razor (**V** selects), **Delete** leaves a gap and closes a selected gap, **Shift+Delete** ripple-deletes, right-click restores removed footage, **S** toggles snapping; drag the line above the timeline to make it taller. On the preview, drag a selected zoom's focus dot to aim it, and **Alt+drag** to tilt a 3D zoom (Alt+Shift rotates, Alt+scroll changes field of view). One Ctrl+Z undoes a whole drag.
 5. **Export video**: MP4, WebM or GIF, rendered frame by frame on the graphics card, usually faster than real time. The desktop app asks where to save (Save As, starting in the last folder used; first time `Videos\Studio Screen\Exports`) and offers **Show in folder**. **Ctrl+E** exports again with the last settings straight into that folder, no dialog. An existing file is only replaced once the new export has finished.
 
 **Ctrl + = / Ctrl + −** makes the whole interface bigger or smaller, and remembers it.
@@ -52,8 +52,11 @@ Portable Windows build: `npm run desktop:pack` (output in `release/`, unsigned l
 - `src/autoEdit.ts`: the automatic rough cut.
 - `src/camera.ts`, `src/cursorPath.ts`, `src/spring.ts`: precomputed motion. `src/compositor.ts`, `src/perspective.ts`: rendering.
 - `src/exporter.ts`, `src/audioMix.ts`, `src/stretch.ts`: frame-by-frame export and offline audio.
-- `src/timeline.ts`: cut/speed mapping, automatic zoom grouping, typing detection, captions.
-- `src/RecordingOverlays.tsx`: floating bar and countdown. `src/MotionPanel.tsx`, `src/EditorPanels.tsx`, `src/TimelineClip.tsx`: panels and timeline.
+- `src/timeline.ts`: cut/speed mapping, automatic zoom grouping (clicks and typing bursts), typing detection, captions.
+- `src/edits.ts`: splits, gaps, ripple cuts, restore, edge drags and snapping on a collapsed timeline (everything stays in recording time).
+- `src/aim.ts`: recording point ↔ preview pixel mapping for the focus dot and aim view.
+- `src/history.ts`, `src/gesture.ts`: undo history with one step per gesture. `src/previewFrames.ts`: last-good-frame hold and coalesced seeks while scrubbing.
+- `src/RecordingOverlays.tsx`: floating bar and countdown. `src/MotionPanel.tsx`, `src/EditorPanels.tsx`: panels. `src/TimelineClip.tsx`, `src/ScreenTrack.tsx`, `src/TimelineMenu.tsx`: timeline clips, the footage track and right-click menus.
 - `src/storage.ts`: IndexedDB library, `.studio` files, migration of older projects.
 
 ## Tests
@@ -81,7 +84,9 @@ node tests/a3-export.mjs
 node tests/a2-recording-ui.mjs
 node tests/a4-native-capture.mjs
 node tests/a5-open-speed.mjs
-node tests/desktop-capture.mjs      # browser-capture fallback
+node tests/desktop-capture.mjs      # browser-capture fallback (stale since 9/14, see STATUS.md)
+# After `npm run desktop:pack` (throwaway profile, doesn't touch your library):
+node tests/packaged-smoke.mjs --portable
 ```
 
 FFmpeg-based checks use `FFMPEG_PATH` (falls back to the AutoPod install). Recordings made by tests are deleted after measuring; results are written to `tests/*-results.json` (git-ignored). Evidence and limits: [VALIDATION.md](VALIDATION.md). Parity with the reference apps: [FEATURE-PARITY.md](FEATURE-PARITY.md).

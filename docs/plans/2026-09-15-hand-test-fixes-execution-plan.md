@@ -1,5 +1,7 @@
 # Hand-test fixes: execution plan (one long run)
 
+> **Executed 2026-09-15.** All 12 slices shipped as Studio Screen 0.4.0. What was built, measured and decided differently: [run log](2026-09-15-hand-test-fixes-run-log.md). Hand test: [STATUS.md](../../STATUS.md).
+
 **What this is:** a decision-complete plan for one long-running agent to fix everything Dan found in his first hand test of Studio Screen 0.3.0 on 2026-09-15, plus build auto-zoom while typing. Decisions were made with Dan in the planning session that day. Background: [STATUS.md](../../STATUS.md), [docs/SPEC.md](../SPEC.md), [VALIDATION.md](../../VALIDATION.md).
 
 **Dan wants this run to go start to finish without stopping.** Only stop for the triggers in section 6. Every other question already has an answer below. If none fits, use the stated *intent* of the slice, log what you chose (section 6b), and keep going.

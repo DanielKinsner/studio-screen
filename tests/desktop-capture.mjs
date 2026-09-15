@@ -13,6 +13,10 @@ const application = await electron.launch({
     ...process.env,
     ELECTRON_ENABLE_LOGGING: "1",
     STUDIO_USER_DATA: path.join(root, "tests/.profile"),
+    // Launch-time recovery scans this folder; never point it at real takes.
+    STUDIO_PROJECTS_DIR: path.join(root, "tests/.projects"),
+    // Exports save here with no Save As dialog.
+    STUDIO_EXPORT_DIR: path.join(root, "tests/.exports"),
     // This test covers the browser-capture fallback; native capture has tests/a4.
     STUDIO_DISABLE_NATIVE: "1",
   },

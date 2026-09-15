@@ -1,11 +1,16 @@
-import { _electron as electron, expect } from "@playwright/test";
+// Packaged app smoke test: `release/win-unpacked` by default, or the portable
+// EXE with --portable. Nothing here moves the pointer or records the screen.
+import { _electron as electron, chromium, expect } from "@playwright/test";
+import { spawn } from "node:child_process";
+import { createServer } from "node:net";
 import fs from "node:fs/promises";
 import path from "node:path";
 const { version } = JSON.parse(
   await fs.readFile(new URL("../package.json", import.meta.url), "utf8"),
 );
+const portable = process.argv.includes("--portable");
 const executablePath = path.resolve(
-  process.argv.includes("--portable")
+  portable
     ? `release/Studio Screen ${version}.exe`
     : "release/win-unpacked/Studio Screen.exe",
 );
@@ -20,9 +25,40 @@ const env = {
   STUDIO_PROJECTS_DIR: path.join(scratch, "recordings"),
   STUDIO_EXPORT_DIR: path.join(scratch, "exports"),
 };
-const app = await electron.launch({ executablePath, timeout: 60000, env });
+
+// The portable EXE unpacks itself and starts the real app as a child, which
+// Playwright's Electron launcher can't follow; attach over DevTools instead.
+let app, browser, child, page;
+if (portable) {
+  const port = await new Promise((resolve) => {
+    const server = createServer();
+    server.listen(0, "127.0.0.1", () => {
+      const { port } = server.address();
+      server.close(() => resolve(port));
+    });
+  });
+  child = spawn(executablePath, [`--remote-debugging-port=${port}`], {
+    env,
+    windowsHide: true,
+    stdio: "ignore",
+  });
+  for (let i = 0; i < 120 && !browser; i++)
+    browser = await chromium
+      .connectOverCDP(`http://127.0.0.1:${port}`, { timeout: 1000 })
+      .catch(() => new Promise((r) => setTimeout(r, 500)).then(() => undefined));
+  if (!browser) throw new Error("The portable EXE never opened its window.");
+  for (let i = 0; i < 60 && !page; i++) {
+    page = browser
+      .contexts()
+      .flatMap((c) => c.pages())
+      .find((p) => !p.url().includes("#"));
+    if (!page) await new Promise((r) => setTimeout(r, 500));
+  }
+} else {
+  app = await electron.launch({ executablePath, timeout: 60000, env });
+  page = await app.firstWindow();
+}
 try {
-  const page = await app.firstWindow();
   await page.getByText("Saved locally", { exact: true }).waitFor();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
@@ -46,34 +82,38 @@ try {
   ).toHaveCount(0);
   await page.locator(".source-grid button").first().waitFor();
   await page.getByRole("button", { name: "Close dialog", exact: true }).click();
-  const displayId = await app.evaluate(({ screen }) =>
-    String(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).id),
-  );
+  // The pointer is on exactly one display: that display's tracker reports it.
+  const displayId = app
+    ? await app.evaluate(({ screen }) =>
+        String(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).id),
+      )
+    : null;
   const pointerProof = await page.evaluate(async (displayId) => {
-    const sources = await window.studioDesktop.sources();
-    const source = sources.find(
-      (s) => s.id.startsWith("screen:") && s.displayId === displayId,
+    const screens = (await window.studioDesktop.sources()).filter(
+      (s) => s.id.startsWith("screen:") && (!displayId || s.displayId === displayId),
     );
-    if (!source)
-      throw new Error("No display available for cursor tracker test.");
-    await window.studioDesktop.selectSource(source.id);
-    try {
-      return await new Promise(async (resolve, reject) => {
-        let unsubscribe = () => {};
-        const timeout = setTimeout(() => {
-          unsubscribe();
-          reject(new Error("Packaged cursor tracker produced no points."));
-        }, 10000);
-        unsubscribe = window.studioDesktop.onPoint((point) => {
-          clearTimeout(timeout);
-          unsubscribe();
-          resolve(point);
+    for (const source of screens) {
+      await window.studioDesktop.selectSource(source.id);
+      try {
+        const point = await new Promise(async (resolve) => {
+          let unsubscribe = () => {};
+          const timeout = setTimeout(() => {
+            unsubscribe();
+            resolve(null);
+          }, displayId ? 10000 : 2500);
+          unsubscribe = window.studioDesktop.onPoint((pt) => {
+            clearTimeout(timeout);
+            unsubscribe();
+            resolve(pt);
+          });
+          await window.studioDesktop.track(true);
         });
-        await window.studioDesktop.track(true);
-      });
-    } finally {
-      await window.studioDesktop.track(false);
+        if (point) return point;
+      } finally {
+        await window.studioDesktop.track(false);
+      }
     }
+    throw new Error("Packaged cursor tracker produced no points.");
   }, displayId);
   await page.screenshot({ path: "tests/packaged-app.png" });
   if (errors.length) throw new Error(errors.join("\n"));
@@ -83,6 +123,7 @@ try {
       {
         executablePath,
         url: page.url(),
+        version: await page.locator(".app-footer .version").innerText(),
         sourcePicker: true,
         cursorTracker: !!pointerProof,
         systemAudioDefault: true,
@@ -97,5 +138,10 @@ try {
     "PASS: packaged app starts, local assets load, native picker works, internal audio default on and mic off.",
   );
 } finally {
-  await app.close();
+  if (app) await app.close();
+  else {
+    await page?.evaluate(() => window.close()).catch(() => {});
+    await browser?.close().catch(() => {});
+    if (child && child.exitCode === null) child.kill();
+  }
 }
