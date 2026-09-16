@@ -35,3 +35,6 @@ tests/.export-location/
 tests/.profile-export/
 tests/.profile-alt/
 tests/.packaged/
+
+# Claude Code worktrees (throwaway checkouts; never commit them).
+.claude/worktrees/
