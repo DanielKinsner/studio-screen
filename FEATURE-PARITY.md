@@ -20,7 +20,7 @@ Legend: ✅ matches the reference behaviour · 🟡 partial · ❌ not built · 
 | Teleprompter / notes invisible to capture | 🟡 | ✅ | ✅ | Notes panel in the floating bar. |
 | Crash-safe recording | — | — | ✅ | Fragmented MP4 on disk; helper finishes the file if the app dies; recovery on launch. |
 | Fast GPU export, MP4 always | ✅ | ✅ | ✅ | Frame-by-frame WebCodecs; 60 s 1080p60 in ~23 s on an RTX 4080. |
-| Auto-zoom on typing | — | ✅ | ❌ | Candidate extra (spec first). |
+| Auto-zoom on typing | — | ✅ | ✅ | Dashed automatic zoom over bursts of typing, aimed at the field that was clicked; toggle under Automatic zoom (0.4.0). |
 | Mic, webcam, camera layouts | ✅ | ✅ | ⛔ | Excluded by decision. |
 | Captions from speech | ✅ | ✅ | ❌ | Manual/SRT captions only. Needs on-device speech-to-text; no mic, so system audio only. |
 | Noise reduction / voice enhance | ✅ | ✅ | ❌ | Not relevant without a mic. |
@@ -37,7 +37,7 @@ Legend: ✅ matches the reference behaviour · 🟡 partial · ❌ not built · 
 | Screen activity | Dirty regions per frame (Windows 11 24H2+) | Older Windows: idle speed-ups off |
 | Zoom/camera | Precomputed spring path in edited time; identical scrub/play/export; follow cursor near view edges | Hand-tuning |
 | Cursor | Spring smoothing that lands on clicks, sizes/styles/angle, idle/timed hide, click rings/pulses/sounds, recorded shapes, hidden outside the area | Custom cursor images |
-| Timeline | Drag/move/resize zoom, caption, element and speed clips; trim, cuts, undo/redo; dashed automatic clips with one-click remove | Multiple source clips, ripple edits |
+| Timeline | Drag/move/resize zoom, caption, element and speed clips; trim, cuts, undo/redo; dashed automatic clips with one-click remove; Premiere-style cutting: Ctrl+K split, razor, gaps, ripple delete, restore, snapping, right-click menus (0.4.0) | Multiple source clips |
 | Auto-edit | Trim, typing 2×, idle 4×, zooms, last look; Back to raw / Apply again | Extras such as a "mark mistake" hotkey (spec first) |
 | Canvas | Gradients, colors/images, padding, corners, shadow, crop, six ratios, browser title bar, watermark | Device mockups |
 | Styles | Three looks, saved styles, import/export, last look reused for new recordings | — |
