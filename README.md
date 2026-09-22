@@ -1,4 +1,6 @@
-# Studio Screen
+# Cool Story
+
+Formerly Studio Screen (renamed 2026-09-22). Only the name people see changed: recordings still live in `Videos\Studio Screen`, the library and settings stay in `%APPDATA%\studio-screen`, and `.studio` files keep their `studio-screen` format tag, so older takes and projects open as before.
 
 A local-first screen recorder and editor for Windows that aims to be almost done with the edit the moment recording stops. Inspired by the capture-to-polished-video workflows of Screen Studio and FocuSee; independently built, not affiliated with either.
 

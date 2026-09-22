@@ -1220,7 +1220,7 @@ export default function App() {
     const desktop = window.studioDesktop;
     const format = exportFormat;
     const name =
-      project.name.replace(/[^a-z0-9 -]/gi, "").trim() || "Studio Screen";
+      project.name.replace(/[^a-z0-9 -]/gi, "").trim() || "Cool Story";
     let file: { id: string; path: string } | null = null;
     let kept = false;
     let lastReport = 0;
@@ -1529,7 +1529,7 @@ export default function App() {
             <span />
           </span>
           <span>
-            studio<span className="brand-light">screen</span>
+            cool<span className="brand-light">story</span>
           </span>
           <ChevronDown size={13} />
         </button>
@@ -3145,7 +3145,7 @@ export default function App() {
                   );
                 } catch {}
               }}
-              description="Studio Screen hides while you record"
+              description="Cool Story hides while you record"
             />
           )}
           <details className="notes-details">

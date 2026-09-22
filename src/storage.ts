@@ -116,7 +116,7 @@ export async function readProject(file: File): Promise<Project> {
     !Array.isArray(p.annotations) ||
     !Array.isArray(p.points)
   )
-    throw new Error("This is not a supported Studio Screen project.");
+    throw new Error("This is not a supported Cool Story project.");
   if (
     !(p.settings.speed > 0 && p.settings.speed <= 4) ||
     !Number.isFinite(p.trimStart) ||

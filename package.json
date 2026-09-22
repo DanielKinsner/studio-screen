@@ -42,7 +42,7 @@
   },
   "build": {
     "appId": "app.studioscreen.desktop",
-    "productName": "Studio Screen",
+    "productName": "Cool Story",
     "directories": {
       "output": "release"
     },
@@ -63,5 +63,5 @@
     ]
   },
   "description": "Local-first screen recording and editing with internal PC audio.",
-  "author": "Studio Screen"
+  "author": "Cool Story"
 }

@@ -38,7 +38,7 @@ async function record({ unprotected }) {
     app.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows().map((w) => ({
         // The editor is always the first window; its title comes from the page.
-        title: w.id === 1 ? "Studio Screen" : w.getTitle(),
+        title: w.id === 1 ? "Cool Story" : w.getTitle(),
         visible: w.isVisible(),
         focused: w.isFocused(),
         bounds: w.getBounds(),
@@ -81,25 +81,25 @@ async function record({ unprotected }) {
     const sawCountdown = await expect
       .poll(async () =>
         (await windows()).some(
-          (w) => w.title === "Studio Screen Countdown" && w.visible,
+          (w) => w.title === "Cool Story Countdown" && w.visible,
         ),
       )
       .toBe(true)
       .then(() => true);
     const hiddenDuringCountdown = !(await windows()).find(
-      (w) => w.title === "Studio Screen",
+      (w) => w.title === "Cool Story",
     ).visible;
     await expect
       .poll(
         async () =>
           (await windows()).some(
-            (w) => w.title === "Studio Screen Recording" && w.visible,
+            (w) => w.title === "Cool Story Recording" && w.visible,
           ),
         { timeout: 15000 },
       )
       .toBe(true);
     const during = await windows();
-    const bar = during.find((w) => w.title === "Studio Screen Recording");
+    const bar = during.find((w) => w.title === "Cool Story Recording");
     const display = await app.evaluate(({ screen }, id) => {
       const d = screen.getAllDisplays().find((d) => String(d.id) === id);
       return d.bounds;
@@ -111,8 +111,8 @@ async function record({ unprotected }) {
     await page.getByText(/Auto-edit:|Recording ready/).waitFor({ timeout: 20000 });
     await page.getByText("Saved locally", { exact: true }).waitFor();
     const after = await windows();
-    const main = after.find((w) => w.title === "Studio Screen");
-    const leftovers = after.filter((w) => w.title !== "Studio Screen");
+    const main = after.find((w) => w.title === "Cool Story");
+    const leftovers = after.filter((w) => w.title !== "Cool Story");
 
     const data = await page.evaluate(async () => {
       const db = await new Promise((res, rej) => {

@@ -13,7 +13,7 @@ const port = await new Promise((resolve) => {
     server.close(() => resolve(port));
   });
 });
-const exe = path.resolve(`release/Studio Screen ${version}.exe`);
+const exe = path.resolve(`release/Cool Story ${version}.exe`);
 const processHandle = spawn(exe, [`--remote-debugging-port=${port}`], {
   windowsHide: true,
   stdio: "ignore",
@@ -56,7 +56,7 @@ try {
   await page.locator(".source-grid button").first().waitFor();
   const source = await page.evaluate(async () =>
     (await window.studioDesktop.sources()).find(
-      (s) => s.id.startsWith("window:") && s.name.startsWith("Studio Screen"),
+      (s) => s.id.startsWith("window:") && s.name.startsWith("Cool Story"),
     ),
   );
   if (!source) throw new Error("Cannot find the portable app test window.");

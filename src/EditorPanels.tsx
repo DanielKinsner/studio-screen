@@ -206,7 +206,7 @@ export function StylePresets({ project, edit, notify }: PanelProps) {
             if (!f) return;
             const data = JSON.parse(await f.text());
             if (data.format !== "studio-style" || !data.settings)
-              throw new Error("Not a Studio Screen style.");
+              throw new Error("Not a Cool Story style.");
             const settings: Partial<Settings> = {};
             for (const k of styleKeys) {
               const value = data.settings[k];

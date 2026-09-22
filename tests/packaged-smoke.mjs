@@ -11,8 +11,8 @@ const { version } = JSON.parse(
 const portable = process.argv.includes("--portable");
 const executablePath = path.resolve(
   portable
-    ? `release/Studio Screen ${version}.exe`
-    : "release/win-unpacked/Studio Screen.exe",
+    ? `release/Cool Story ${version}.exe`
+    : "release/win-unpacked/Cool Story.exe",
 );
 // A throwaway profile and recordings folder: the smoke test edits a project
 // and the app recovers unfinished takes on launch, so it must never see

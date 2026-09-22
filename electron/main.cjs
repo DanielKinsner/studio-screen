@@ -23,6 +23,9 @@ const dev = process.argv.includes("--dev");
 // project library.
 if (process.env.STUDIO_USER_DATA)
   app.setPath("userData", path.resolve(process.env.STUDIO_USER_DATA));
+// The app was renamed from Studio Screen; its library and settings stay in the
+// profile folder it always used (%APPDATA%\studio-screen) so nothing goes missing.
+else app.setPath("userData", path.join(app.getPath("appData"), "studio-screen"));
 // Tests paint the recording bar a unique colour so frames can be scanned for it.
 const testMarker = process.env.STUDIO_TEST_MARKER === "1";
 const testUnprotected = process.env.STUDIO_TEST_UNPROTECTED === "1";
@@ -95,7 +98,7 @@ const openExports = new Map();
 const exported = new Set();
 async function uniquePath(dir, name, extension) {
   const base = (
-    name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "").trim() || "Studio Screen"
+    name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "").trim() || "Cool Story"
   ).slice(0, 80);
   for (let i = 0; ; i++) {
     const file = path.join(
@@ -262,7 +265,7 @@ function showCountdown(display, seconds) {
     const area = display.workArea;
     countdownWindow = new BrowserWindow({
       ...overlayOptions,
-      title: "Studio Screen Countdown",
+      title: "Cool Story Countdown",
       width: size,
       height: size,
       x: Math.round(area.x + (area.width - size) / 2),
@@ -302,7 +305,7 @@ function showBar(display, status) {
   barWindow = new BrowserWindow({
     ...overlayOptions,
     ...barBounds(display, false),
-    title: "Studio Screen Recording",
+    title: "Cool Story Recording",
     movable: true,
   });
   const win = barWindow;
@@ -363,7 +366,7 @@ app.whenReady().then(() => {
     minWidth: Math.min(800, workArea.width),
     minHeight: Math.min(700, workArea.height),
     show: false,
-    title: "Studio Screen",
+    title: "Cool Story",
     backgroundColor: "#1d1f21",
     // Alt is an editing modifier (Alt+drag tilts a 3D zoom), so it must never
     // reveal the menu bar. An auto-hide menu bar toggles on Alt; a hidden one

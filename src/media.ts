@@ -150,7 +150,7 @@ export async function capture(options: CaptureOptions) {
     const mimeType = videoMime("webm");
     if (!mimeType)
       throw new Error(
-        "Recording is not supported in this browser. Open Studio Screen in Chrome or Edge.",
+        "Recording is not supported in this browser. Open Cool Story in Chrome or Edge.",
       );
     const record = new MediaRecorder(mixed, {
       mimeType,
