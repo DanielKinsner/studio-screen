@@ -39,16 +39,19 @@ import {
   Clapperboard,
   Copy,
   Download,
+  Droplets,
   Expand,
+  EyeOff,
+  Flashlight,
   FolderOpen,
   ImagePlus,
   Layers,
+  ListOrdered,
   LoaderCircle,
   Magnet,
   Maximize,
   Monitor,
   MousePointer2,
-  Move,
   Music2,
   Pause,
   Play,
@@ -93,6 +96,7 @@ import {
   speedAt,
   parseSrt,
   timecode,
+  times,
 } from "./timeline";
 import { cardRect, dimensions, renderFrame } from "./compositor";
 import { exportProject, type ExportFormat } from "./exporter";
@@ -126,6 +130,17 @@ const tabs = [
   { id: "audio", label: "Audio", icon: AudioLines },
   { id: "captions", label: "Captions", icon: Subtitles },
   { id: "annotations", label: "Annotate", icon: Type },
+];
+/** Annotate panel tools; the timeline shows the same names. */
+const annotationTools = [
+  { type: "text", label: "Text", icon: Type },
+  { type: "arrow", label: "Arrow", icon: ArrowRight },
+  { type: "blur", label: "Redact", icon: EyeOff },
+  { type: "spotlight", label: "Spotlight", icon: Flashlight },
+  { type: "soft-blur", label: "Blur", icon: Droplets },
+  { type: "rectangle", label: "Box", icon: Square },
+  { type: "ellipse", label: "Circle", icon: Circle },
+  { type: "step", label: "Step", icon: ListOrdered },
 ];
 const uid = () => crypto.randomUUID();
 /** No zooms, one array forever, so the flat view's camera path stays cached. */
@@ -1625,24 +1640,6 @@ export default function App() {
               >
                 <Redo2 size={16} />
               </IconButton>
-              <span className="vertical-line" />
-              <button
-                className="fit-button"
-                onClick={() => {
-                  const el = canvas.current?.parentElement;
-                  if (document.fullscreenElement)
-                    void document.exitFullscreen();
-                  else
-                    void el
-                      ?.requestFullscreen()
-                      .catch(() =>
-                        notify("Fullscreen is unavailable in this window."),
-                      );
-                }}
-              >
-                Fit
-                <ChevronDown size={12} />
-              </button>
             </div>
           </div>
           <div
@@ -2102,7 +2099,7 @@ export default function App() {
                         key={z.id}
                         {...z}
                         {...clipProps}
-                        label={`${(z.mode || s.motionMode) === "3d" ? "3D" : "2D"} · ${z.scale.toFixed(1)}×`}
+                        label={`${(z.mode || s.motionMode) === "3d" ? "3D" : "2D"} · ${times(z.scale)}`}
                         kind="zoom"
                         auto={
                           z.id.startsWith("auto-") &&
@@ -2166,7 +2163,11 @@ export default function App() {
                         key={a.id}
                         {...a}
                         {...clipProps}
-                        label={a.type === "blur" ? "Redact" : a.type}
+                        label={
+                          (a.type === "text" && a.text) ||
+                          annotationTools.find((t) => t.type === a.type)?.label ||
+                          a.type
+                        }
                         kind="annotation"
                         selected={selected === a.id}
                         onSelect={() => {
@@ -2601,15 +2602,6 @@ export default function App() {
                     </button>
                   </>
                 )}
-                <div className="section-divider" />
-                <div className="inspector-note">
-                  <Subtitles size={16} />
-                  <p>
-                    Clean audio starts at the source.
-                    <br />
-                    <span>Enable noise suppression when recording.</span>
-                  </p>
-                </div>
               </>
             )}
             {tab === "captions" && (
@@ -2769,16 +2761,7 @@ export default function App() {
                   <h2>Say it with a little emphasis.</h2>
                 </div>
                 <div className="annotation-buttons">
-                  {[
-                    { type: "text", label: "Text", icon: Type },
-                    { type: "arrow", label: "Arrow", icon: ArrowRight },
-                    { type: "blur", label: "Redact", icon: Square },
-                    { type: "spotlight", label: "Spotlight", icon: Circle },
-                    { type: "soft-blur", label: "Blur", icon: Move },
-                    { type: "rectangle", label: "Box", icon: Square },
-                    { type: "ellipse", label: "Circle", icon: Circle },
-                    { type: "step", label: "Step", icon: Plus },
-                  ].map((a) => (
+                  {annotationTools.map((a) => (
                     <button
                       key={a.type}
                       onClick={() => {

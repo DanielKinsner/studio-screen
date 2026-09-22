@@ -6,7 +6,7 @@ const feels = [
   ["smooth", "Smooth"],
   ["gentle", "Floaty"],
 ] as const;
-import { autoZooms, clamp, timecode, zoomLead } from "./timeline";
+import { autoZooms, clamp, timecode, times, zoomLead } from "./timeline";
 import { tiltPresets } from "./motion";
 import { Slider, Toggle, IconButton } from "./Controls";
 export type PanelProps = {
@@ -391,7 +391,7 @@ export default function MotionPanel({
                 ? "3D perspective"
                 : "2D focus"}
               <small>
-                {timecode(v.start)} – {timecode(v.end)} · {v.scale.toFixed(1)}×
+                {timecode(v.start)} – {timecode(v.end)} · {times(v.scale)}
               </small>
             </span>
             {v.id.startsWith("auto-") && <Sparkles size={12} />}

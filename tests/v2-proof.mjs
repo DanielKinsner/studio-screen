@@ -11,7 +11,7 @@ try {
   await page.getByText("Saved locally", { exact: true }).waitFor();
   await page.getByRole("button", { name: "Focus & 3D", exact: true }).click();
   await page.getByRole("button", { name: "Add 3D zoom", exact: true }).click();
-  const clip = page.getByRole("button", { name: "3D · 1.4×", exact: true });
+  const clip = page.getByRole("button", { name: "3D · 1.35×", exact: true });
   const b = await clip.boundingBox();
   await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
   await page.mouse.down();

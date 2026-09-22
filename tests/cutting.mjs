@@ -126,7 +126,7 @@ try {
   results.razor = await counts();
 
   // 7. A zoom drag snaps exactly onto the split at 8 s from 5 px away.
-  const autoZoom = page.locator(".zoom-clip", { hasText: "1.6×" }).first();
+  const autoZoom = page.locator(".zoom-clip", { hasText: "1.65×" }).first();
   await autoZoom.click();
   const zoomStart = page.getByLabel("Zoom start", { exact: true });
   const startBefore = +(await zoomStart.inputValue());

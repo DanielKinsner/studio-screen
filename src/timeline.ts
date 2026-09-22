@@ -9,6 +9,8 @@ export const timecode = (n: number) =>
     .padStart(2, "0")}:${Math.floor(Math.max(0, n) % 60)
     .toString()
     .padStart(2, "0")}`;
+/** A magnification as the inspector shows it: 1.65×, 2×. */
+export const times = (n: number) => `${+n.toFixed(2)}×`;
 export function visibleSegments(p: Project) {
   const cuts = [...p.cuts].sort((a, b) => a.start - b.start);
   const segments: { start: number; end: number }[] = [];
