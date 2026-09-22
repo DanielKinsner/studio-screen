@@ -288,6 +288,11 @@ export async function exportProject(
         numberOfChannels: 2,
         sampleRate: SAMPLE_RATE,
       }));
+    // Without an encoder the video would come out silent: say so instead.
+    if (wantsAudio && !withAudio)
+      throw new Error(
+        `This computer can't encode ${mp4 ? "AAC" : "Opus"} audio, so the export would be silent. Try ${mp4 ? "WebM" : "MP4"}, or mute the recording, music and click sounds to export without sound.`,
+      );
 
     const target = options.writer
       ? new StreamTarget(

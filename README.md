@@ -68,6 +68,7 @@ npm run test          # unit tests
 npm run build
 # With `npm run dev` running (browser tests use installed Microsoft Edge):
 node tests/browser-smoke.mjs
+node tests/export-audio-encoder.mjs  # no audio encoder: export stops and says so, never silent
 node tests/v2-proof.mjs
 node tests/v2-visual.mjs
 node tests/v2-audio.mjs
