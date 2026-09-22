@@ -21,7 +21,7 @@ import {
   type StreamTargetChunk,
   type VideoSample,
 } from "mediabunny";
-import { GIFEncoder, applyPalette, quantize } from "gifenc";
+import { gifWriter } from "./gif";
 import type { Project } from "./types";
 import { dimensions, releaseCompositor, renderFrame } from "./compositor";
 import { outputDuration, sourceTime } from "./timeline";
@@ -233,31 +233,21 @@ export async function exportProject(
       });
 
     if (options.format === "gif") {
-      const gif = GIFEncoder();
+      const gif = gifWriter(canvas.width, canvas.height, fps);
       for (let i = 0; i < frames; i++) {
         if (signal.aborted) throw aborted();
         await draw(i);
-        const data = canvas
-          .getContext("2d")!
-          .getImageData(0, 0, canvas.width, canvas.height).data;
-        const palette = quantize(data, 256);
-        gif.writeFrame(
-          applyPalette(data, palette),
-          canvas.width,
-          canvas.height,
-          {
-            palette,
-            delay: 1000 / fps,
-            repeat: 0,
-          },
+        gif.add(
+          canvas
+            .getContext("2d")!
+            .getImageData(0, 0, canvas.width, canvas.height).data,
         );
         report(i);
         // Let the page breathe between the heavy palette steps.
         if (i % 10 === 9) await new Promise((r) => setTimeout(r, 0));
       }
       await samples?.return(undefined);
-      gif.finish();
-      const bytes = new Uint8Array(gif.bytes());
+      const bytes = gif.finish();
       if (options.writer) {
         await options.writer.write(0, bytes);
         return null;
