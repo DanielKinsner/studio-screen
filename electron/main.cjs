@@ -16,6 +16,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { spawn } = require("node:child_process");
+const { openHelperPipe } = require("./helper-pipe.cjs");
 let mainWindow, selectedSource, pointerTimer, helper;
 let barWindow, countdownWindow, recordingDisplay;
 const dev = process.argv.includes("--dev");
@@ -674,7 +675,12 @@ app.whenReady().then(() => {
           windowsHide: true,
           stdio: ["pipe", "pipe", "pipe"],
         });
-    const current = (helper = { child, folder, stopped: false });
+    const current = (helper = {
+      child,
+      folder,
+      stopped: false,
+      command: openHelperPipe(child),
+    });
     const send = (message) => {
       if (mainWindow && !mainWindow.isDestroyed())
         mainWindow.webContents.send("studio:native-event", message);
@@ -745,7 +751,7 @@ app.whenReady().then(() => {
   ipcMain.handle("studio:native-command", (event, command) => {
     assertSender(event);
     if (helper && ["begin", "pause", "resume", "stop"].includes(command))
-      helper.child.stdin.write(command + "\n");
+      helper.command(command);
   });
   ipcMain.handle("studio:native-events", async (event, folder) => {
     assertSender(event);
@@ -801,7 +807,7 @@ app.whenReady().then(() => {
   mainWindow.on("closed", () => {
     stopTracking();
     // Finish any take in progress cleanly before the app goes away.
-    helper?.child.stdin.write("stop\n");
+    helper?.command("stop");
     closeRecordingUi();
     mainWindow = undefined;
   });
