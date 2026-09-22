@@ -20,7 +20,11 @@
 - GIF frames share a palette until the scene changes: no shimmer, smaller files (`src/gif.ts`, `src/gif.test.ts`; the sample GIF went from 360 palettes to 1).
 - Checked and **not** a bug: dragging footage back over a ripple cut leaves trimmed zooms trimmed, same as Restore footage (ripple trims are permanent; Ctrl+Z undoes).
 
-**Verified:** `tsc`; 122 unit tests in 19 files; 17 Rust tests; build; browser tests `browser-smoke`, `export-audio-encoder`, `editor-interactions`, `focus-dot`, `cutting`, `v2-proof`, `v2-visual`, `v2-audio`, `3d-fit`, `webm-export`; readability audit at 2560×1440 (no text under 12 px); `packaged-smoke --portable` on 0.4.3. **Not run** (need an idle PC): `a2-recording-ui` (now looks for "Cool Story" windows) and the a4 capture tests.
+**Verified:** `tsc`; 122 unit tests in 19 files; 17 Rust tests; build; browser tests `browser-smoke`, `export-audio-encoder`, `editor-interactions`, `focus-dot`, `cutting`, `v2-proof`, `v2-visual`, `v2-audio`, `3d-fit`, `webm-export`; readability audit at 2560×1440 (no text under 12 px); `packaged-smoke --portable` on 0.4.3.
+
+**Idle-PC run, 2026-09-22 12:44–12:54** (details in VALIDATION.md): `a4-cadence` passed (first green under its final rule), `a2-recording-ui`, `a5-open-speed`, `desktop-capture`, `export-formats`, `audio-proof`, `alt-tilt`, `export-location`, `hidpi-window` passed; `a4-av-sync` 70 ms, unchanged from 0.4.2 (fails its rule by design on this PC). **Still to run at an idle break:** `a4-native-capture` (its fixture opened behind the maximized Claude window and the injected input went there; fixed so the fixture stays on top and the test refuses to inject unless its window is under every target point) and the 30-minute `a4-soak` (stopped itself when the PC was used).
+
+**Don't run `tests/portable-launch.mjs`.** It predates the capture helper, isn't in the README suite, and uses the real profile and `Videos\Studio Screen`: on 2026-09-22 it left a test take there, **"Recording · Sep 22"** (1:54 of the app's own window with a test tone, folder `Videos\Studio Screen\2026-09-22 12.46.17`). Dan can delete that take. `packaged-smoke --portable` covers the portable launch safely. Decide: delete the file (recommended) or rewrite it for the helper and a throwaway profile.
 
 ### Dan's hand test for 0.4.3 (about 3 minutes)
 
