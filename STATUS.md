@@ -1,33 +1,35 @@
-# Status — Studio Screen
+# Status — Cool Story (formerly Studio Screen)
 
-**Last updated:** 2026-09-22 (renamed to **Cool Story** and recoloured signal violet; full-app review logged below. 0.4.2 is still the latest pack)
+**Last updated:** 2026-09-22 (**Cool Story 0.4.3** packed and installed: rename, violet, design pass, five review fixes, one word for zooms)
 
-## 2026-09-22: Cool Story rename, violet accent, full-app review
+## 0.4.3: Cool Story (2026-09-22)
 
-**Rename (display name only).** Logo wordmark, window titles, page title, messages, `productName` (so the next pack is `release\Cool Story <version>.exe`) and the app icon. Deliberately **unchanged**, because they are storage addresses: `Videos\Studio Screen` (takes and exports), `%APPDATA%\studio-screen` (library and settings; now pinned in `electron/main.cjs` so a name change can never move it), the IndexedDB name and the `.studio` format tag `studio-screen`. Renaming those later needs a migration step first.
+**Installed.** `%LOCALAPPDATA%\Programs\Cool Story\Cool Story.exe`, with a Start-menu shortcut **Cool Story** (type it in Start; pin it if you like). Same file as `release\Cool Story 0.4.3.exe` (receipt in VALIDATION.md). Future packs overwrite that one exe; the shortcut stays.
+
+**Rename (display name only).** Logo wordmark, window titles, page title, messages, `productName` (exe name) and the app icon. Deliberately **unchanged**, because they are storage addresses: `Videos\Studio Screen` (takes and exports), `%APPDATA%\studio-screen` (library and settings; now pinned in `electron/main.cjs` so a name change can never move it), the IndexedDB name and the `.studio` format tag `studio-screen`. Renaming those later needs a migration step first. Checked on the installed 0.4.3 with the real profile: it used `%APPDATA%\studio-screen`, created no `Cool Story` profile, and its library lists all **8 projects** (it opened "Recording · Sep 15").
 
 **Recolour.** Peach accent became `--accent: #8f80ff` (signal violet), and olive-tinted greys became cool slate: 251 colour values in `src/styles.css` moved by hue family. Colours that carry meaning were left alone (red removed/record/discard, green export success, the timeline clip-type colours). Default annotation colours drawn into exported video (`compositor.ts`) are still peach on purpose; they're video content, not app chrome.
 
-**Verified:** 115/115 unit tests, `npm run build`, headless screenshots of every panel and dialog at 2560×1440, readability audit (no text under 12 px; the only low-contrast text is the Screen-clip title over the filmstrip, as before), no console errors. **Not yet run:** `a2-recording-ui` (needs an idle PC), `packaged-smoke` / `portable-launch` (need a new pack; they now expect `Cool Story <version>.exe`). Before relying on the rename, pack once and check the library still lists your takes.
+**Design pass** (`e16c97e`, `9c91670`, `36c8d52`): panels open on their controls (headlines, intro copy and the Canvas tip card removed); a selected zoom or speed section shows its controls at the top, with a compact Classic zoom / 3D perspective toggle for a selected zoom; help text 13 px, one step below the labels; Audio leads with volume; one save message (by the project name); Annotate icons all distinct and element clips named like the panel; zoom labels show the real magnification (1.65×, 1.35×); the "Fit" button (a second fullscreen button) and the noise-suppression tip are gone. One word for zooms: **zoom** for the clips (tab **Zoom & 3D**, "Selected zoom", "Zooms"), **focus point** only for where a zoom aims.
 
-**Review findings awaiting Dan's call** (each checked against the code; nothing below is fixed yet):
-- Import: `readProject` (`src/storage.ts`) keeps a `folder` field from an imported `.studio`, so a hand-edited file could make autosave overwrite another take's `project.json`. One-line fix: drop `folder` on import. Your own exports already strip it.
-- Helper pipe: `electron/main.cjs` writes to the helper's stdin with no error listener; if the helper dies at that moment, the main process throws. One-line fix.
-- Keyboard privacy: on AltGr keyboard layouts (German, French…), typing `@`, `{` etc. is logged as a "Ctrl + Alt + <key>" shortcut label (`native/studio-capture/src/main.rs`, shortcut branch). US layout is unaffected.
-- Export: if the PC can't encode AAC/Opus, `exporter.ts` exports silently without sound instead of saying so.
-- GIF export builds a new 256-colour palette per frame (visible colour shimmer on long GIFs).
-- Still open from the design pass: one word for zoom / focus / focus moment (the UI uses all three for the same thing).
+**Review fixes, each with a test that fails before and passes after:**
+- Imported `.studio` files drop `folder` and `videoUrl`, so autosave can't write into another take (`src/storage.test.ts`).
+- A capture helper that dies mid-take can't crash the main process through its stdin pipe (`electron/helper-pipe.cjs`, `tests/helper-pipe.test.js`; 5 of 5 runs raised EPIPE before).
+- AltGr characters (@ { } €) log as anonymous typing, never as "Ctrl + Alt + <key>" (`native/studio-capture/src/keys.rs`, 6 tests).
+- An export that can't encode its audio stops with a message instead of saving a silent file (`tests/export-audio-encoder.mjs`).
+- GIF frames share a palette until the scene changes: no shimmer, smaller files (`src/gif.ts`, `src/gif.test.ts`; the sample GIF went from 360 palettes to 1).
+- Checked and **not** a bug: dragging footage back over a ripple cut leaves trimmed zooms trimmed, same as Restore footage (ripple trims are permanent; Ctrl+Z undoes).
 
-**Design wins built the same day** (`e16c97e`, `9c91670`): panels open on their controls (headlines, intro copy and the Canvas tip card removed); a selected zoom or speed section shows its controls at the top, with a compact Classic zoom / 3D perspective toggle for a selected zoom; help text 13 px, one step below the labels; Audio leads with volume; one save message (by the project name); Annotate icons all distinct and element clips named like the panel; zoom labels show the real magnification (1.65×, 1.35×); the "Fit" button (a second fullscreen button) and the noise-suppression tip are gone. Verified: `tsc`, 115 unit tests, build, and the browser tests `browser-smoke`, `editor-interactions`, `focus-dot`, `cutting`, `v2-proof`, `v2-visual`, `3d-fit` (the last two tests' zoom-label expectations were updated to the exact values).
+**Verified:** `tsc`; 122 unit tests in 19 files; 17 Rust tests; build; browser tests `browser-smoke`, `export-audio-encoder`, `editor-interactions`, `focus-dot`, `cutting`, `v2-proof`, `v2-visual`, `v2-audio`, `3d-fit`, `webm-export`; readability audit at 2560×1440 (no text under 12 px); `packaged-smoke --portable` on 0.4.3. **Not run** (need an idle PC): `a2-recording-ui` (now looks for "Cool Story" windows) and the a4 capture tests.
 
-### Dan's hand test for the rename and design pass (about 3 minutes)
+### Dan's hand test for 0.4.3 (about 3 minutes)
 
-1. `npm run desktop:dev`. The window title and logo say **Cool Story**; buttons, toggles and the playhead are violet.
-2. Click **coolstory ⌄** (top left): your library lists your takes as before. If it's empty, stop and tell me.
-3. Focus & 3D → click a zoom clip on the timeline: "Selected focus" is at the top of the panel. Switch Classic zoom ↔ 3D perspective there; the clip label changes 2D ↔ 3D.
-4. Annotate: eight different icons. Add a Box: its timeline clip says "Box".
-5. Anything you miss from the removed headlines or footer text? Say so and it comes back.
-- Checked and **not** a bug: dragging footage back over a ripple cut leaves trimmed zooms trimmed — same as Restore footage; ripple trims are permanent by design (Ctrl+Z undoes).
+1. Start → type **Cool Story** → open it. Violet buttons, "coolstory" logo, footer `v0.4.3`.
+2. Click **coolstory ⌄** (top left): your takes are all there.
+3. **Zoom & 3D** → click a zoom clip: "Selected zoom" is at the top; switch Classic zoom ↔ 3D perspective there and the clip label follows.
+4. Annotate: eight different icons; add a Box and its timeline clip says "Box".
+5. Record a short take and export it as MP4: the sound is there, as before.
+6. Anything you miss from the removed headlines or footer text? Say so and it comes back.
 
 ## Where things stand
 
@@ -81,9 +83,9 @@ What changed since 0.3.0, in Dan's words from the first hand test:
    - **Pinned by** `tests/native-export-frames.mjs`: it builds a clip with the helper's exact layout and a frame-number barcode in every frame, and checks that every exported frame shows the right source frame. It fails on the old reader (252, 126 and 246 wrong frames) and passes with the fix (0 of 1,050). `node tests/native-export-frames.mjs --recording "<take>\recording.mp4"` checks a real take against FFprobe.
    - **Before a hand re-test:** run `npm install` so the patch is applied, then rebuild the portable. A pack without the patch still stalls.
 
-## Dan's hand test for 0.4.2
+## Dan's hand test for 0.4.2 (recording and export; still applies to 0.4.3)
 
-Run `release\Studio Screen 0.4.2.exe` on the office PC (0.4.0 drifts and stalls, 0.4.1 stutters on smooth motion; don't use them) (on another PC: `npm run desktop:pack` first). It opens your existing library; older projects load fine. For the sync check in step 13, close Premiere, Discord and Spotify first.
+Run the installed **Cool Story** (0.4.3, Start menu) or `release\Studio Screen 0.4.2.exe` on the office PC (0.4.0 drifts and stalls, 0.4.1 stutters on smooth motion; don't use them) (on another PC: `npm run desktop:pack` first). In 0.4.3 the "Focus & 3D" tab below is called **Zoom & 3D**. It opens your existing library; older projects load fine. For the sync check in step 13, close Premiere, Discord and Spotify first.
 
 1. **Record a take.** New recording → your main display → Start. During the take:
    - Click something top-left, then something bottom-right within a second.
@@ -129,8 +131,8 @@ Tell me: which zoom lead feels right, whether typing zooms are welcome, how the 
 
 ## Next steps (in order)
 
-1. Dan's hand test above.
-2. **Dan's simultaneous comparison on 0.4.2:** start a Studio Screen recording of the main display, play the YouTube sync clip fullscreen in Chrome, press Alt+F9 to start NVIDIA mid-play, wait ~15 s, Alt+F9 to stop, then stop Studio Screen. Same playback, both recorders: cadence and audio offset are then compared like for like (beep spacing 1.000000 s, `node tests/native-export-frames.mjs --recording "<take>ecording.mp4"` 0 mistimed frames, export smooth in Premiere). At the next 2-minute idle break: `a4-cadence` (not yet run green under its final rule; its last run measured 40 odd steps against 48 skipped refreshes), `a4-native-capture`, `a4-av-sync`.
+1. Dan's hand test for 0.4.3 (top of this file), then the recording/export steps of the 0.4.2 hand test above.
+2. **Dan's simultaneous comparison on 0.4.3** (same capture as 0.4.2 plus the AltGr fix): start a Cool Story recording of the main display, play the YouTube sync clip fullscreen in Chrome, press Alt+F9 to start NVIDIA mid-play, wait ~15 s, Alt+F9 to stop, then stop Studio Screen. Same playback, both recorders: cadence and audio offset are then compared like for like (beep spacing 1.000000 s, `node tests/native-export-frames.mjs --recording "<take>ecording.mp4"` 0 mistimed frames, export smooth in Premiere). At the next 2-minute idle break: `a4-cadence` (not yet run green under its final rule; its last run measured 40 odd steps against 48 skipped refreshes), `a4-native-capture`, `a4-av-sync`.
 3. Tune defaults from Dan's answers (zoom lead, typing zoom).
 4. Still unverified from before: the separate 30-minute/4K soak and timed 4K60 export.
 5. Report the mediabunny index bug upstream (Dan decides; `npx patch-package mediabunny --create-issue` drafts it). When a fixed mediabunny ships, upgrade and delete the patch; `native-export-frames` confirms it.

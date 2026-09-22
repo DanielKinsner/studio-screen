@@ -234,3 +234,11 @@ Also after the fix: the real 9/15 `native-capture.webm` and `region-capture.webm
 - Bundled `resources/studio-capture.exe` = `native/studio-capture/target/release/studio-capture.exe` = SHA-256 `019DAC1E60D3E23A7277EBDA4D9B53A5794B8397701DCE2D9CE2636B7E2CBD6A` (built by the pack from `b08731f`: timestamp-filled video slots + contiguous audio alignment).
 - `node tests/packaged-smoke.mjs --portable` **PASS** on this exe (footer `v0.4.2`, native picker, system audio on, no mic controls, no page errors).
 - Pending on this build: Dan's simultaneous NVIDIA comparison (STATUS next step 2); `a4-cadence` green under its final rule, `a4-native-capture` and `a4-av-sync` at the next idle break.
+
+## 0.4.3 pack (Cool Story) — office PC — 2026-09-22
+
+- Packed from the main checkout at `39dd10e` after `npm install` (`mediabunny@1.56.2 ✔`), `npm run desktop:pack`, default compression. `release/Cool Story 0.4.3.exe`: **103,215,321 bytes**, SHA-256 `E88C635805E64736644B45F1D53342F82B5440745109CD47503C0746ED53A966`, unsigned local build.
+- Bundled `resources/studio-capture.exe` = `native/studio-capture/target/release/studio-capture.exe` = SHA-256 `F4A1E711D9FE7290641095AF3F726D020D2E99628481833E01D152AD1F7422A2` (0.4.2's capture plus `keys.rs`: AltGr characters logged as typing).
+- `node tests/packaged-smoke.mjs --portable` **PASS** on this exe (footer `v0.4.3`, native picker, system audio on, no mic controls, no page errors).
+- **Installed** as `%LOCALAPPDATA%\Programs\Cool Story\Cool Story.exe` (byte-identical, same SHA-256) with a Start-menu shortcut `Cool Story.lnk`. Launched once on Dan's real profile: it used `%APPDATA%\studio-screen`, created no `%APPDATA%\Cool Story`, and its library listed **8 projects**, so the rename kept the library. (Closing it by script met the app's "still saving" prompt, which kept it open as designed; closed normally once "Saved locally" showed.)
+- Before the pack: `tsc`; 122 unit tests in 19 files; 17 Rust tests; build; browser tests `browser-smoke`, `export-audio-encoder`, `editor-interactions`, `focus-dot`, `cutting`, `v2-proof`, `v2-visual`, `v2-audio`, `3d-fit`, `webm-export`. The sample project exported as a GIF uses one palette for all 360 frames (was one per frame). Not run: the idle-gated screen tests.
