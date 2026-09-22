@@ -209,6 +209,10 @@ export async function readProject(file: File): Promise<Project> {
       p[key] = await (await fetch(p[key])).blob();
     }
   }
+  // An imported project owns no take folder: autosave writes project.json
+  // into `folder`, so a stray one would overwrite another take's edits.
+  delete p.folder;
+  delete p.videoUrl;
   p.id = crypto.randomUUID();
   return migrateProject(p);
 }
