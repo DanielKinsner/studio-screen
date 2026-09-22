@@ -12,6 +12,7 @@ mod audio_timeline;
 mod capture;
 mod encoder;
 mod input;
+mod keys;
 mod util;
 mod video_timeline;
 
@@ -121,35 +122,6 @@ fn commands(parent: Option<u32>) -> Receiver<Command> {
         let _ = tx.send(Command::Stop);
     });
     rx
-}
-
-fn key_label(vk: u32) -> Option<String> {
-    Some(match vk {
-        0x30..=0x39 | 0x41..=0x5A => char::from_u32(vk)?.to_string(),
-        0x70..=0x87 => format!("F{}", vk - 0x6F),
-        0x20 => "Space".into(),
-        0x0D => "Enter".into(),
-        0x09 => "Tab".into(),
-        0x1B => "Esc".into(),
-        0x08 => "Backspace".into(),
-        0x2E => "Delete".into(),
-        0x25 => "←".into(),
-        0x26 => "↑".into(),
-        0x27 => "→".into(),
-        0x28 => "↓".into(),
-        0x24 => "Home".into(),
-        0x23 => "End".into(),
-        0x21 => "Page Up".into(),
-        0x22 => "Page Down".into(),
-        _ => return None,
-    })
-}
-const CTRL: [u32; 3] = [0x11, 0xA2, 0xA3];
-const ALT: [u32; 3] = [0x12, 0xA4, 0xA5];
-const SHIFT: [u32; 3] = [0x10, 0xA0, 0xA1];
-const WIN: [u32; 2] = [0x5B, 0x5C];
-fn is_typing_key(vk: u32) -> bool {
-    matches!(vk, 0x20 | 0x30..=0x39 | 0x41..=0x5A | 0x60..=0x6F | 0xBA..=0xC0 | 0xDB..=0xDF | 0xE2)
 }
 
 fn rect_of(target: &capture::Target) -> Option<RECT> {
@@ -489,25 +461,15 @@ fn record(config: Config) -> Result<()> {
                     if t < 0 || repeat || window.map(|w| w != foreground).unwrap_or(false) {
                         continue;
                     }
-                    if CTRL.contains(&vk) || ALT.contains(&vk) || SHIFT.contains(&vk) || WIN.contains(&vk) {
-                        continue;
-                    }
-                    let held = |keys: &[u32]| keys.iter().any(|k| pressed.contains(k));
-                    let (ctrl, alt, shift, win) = (held(&CTRL), held(&ALT), held(&SHIFT), held(&WIN));
-                    let function = (0x70..=0x87).contains(&vk);
-                    if (ctrl || alt || win || function) && key_label(vk).is_some() {
-                        let label = format!(
-                            "{}{}{}{}{}",
-                            if ctrl { "Ctrl + " } else { "" },
-                            if alt { "Alt + " } else { "" },
-                            if win { "Win + " } else { "" },
-                            if shift { "Shift + " } else { "" },
-                            key_label(vk).unwrap()
-                        );
-                        let _ = writeln!(events, "{}", json!({ "t": seconds(t), "k": "s", "s": label }));
-                    } else if is_typing_key(vk) {
+                    match keys::classify(vk, &pressed) {
+                        keys::Key::Shortcut(label) => {
+                            let _ = writeln!(events, "{}", json!({ "t": seconds(t), "k": "s", "s": label }));
+                        }
                         // Activity only: which key was pressed is never stored.
-                        let _ = writeln!(events, "{}", json!({ "t": seconds(t), "k": "y" }));
+                        keys::Key::Typing => {
+                            let _ = writeln!(events, "{}", json!({ "t": seconds(t), "k": "y" }));
+                        }
+                        keys::Key::Modifier | keys::Key::Other => {}
                     }
                 }
                 input::Event::Cursor { shape, time } => {
