@@ -16,7 +16,17 @@
 - Keyboard privacy: on AltGr keyboard layouts (German, French…), typing `@`, `{` etc. is logged as a "Ctrl + Alt + <key>" shortcut label (`native/studio-capture/src/main.rs`, shortcut branch). US layout is unaffected.
 - Export: if the PC can't encode AAC/Opus, `exporter.ts` exports silently without sound instead of saying so.
 - GIF export builds a new 256-colour palette per frame (visible colour shimmer on long GIFs).
-- Design wins proposed (not built): drop the marketing headline at the top of each panel; put the selected clip's controls first; make help text smaller than control labels (`.helper-text` is overridden to 16 px near the end of `styles.css`); stale Audio tip about noise suppression (there's no mic); duplicate icons in Annotate (Redact/Box, Spotlight/Circle; Blur uses a move icon); "Fit ▾" toggles fullscreen; one word for zoom/focus/focus moment; "1.6×" clip labels vs "1.65×" in the inspector; four separate "saved locally" messages.
+- Still open from the design pass: one word for zoom / focus / focus moment (the UI uses all three for the same thing).
+
+**Design wins built the same day** (`e16c97e`, `9c91670`): panels open on their controls (headlines, intro copy and the Canvas tip card removed); a selected zoom or speed section shows its controls at the top, with a compact Classic zoom / 3D perspective toggle for a selected zoom; help text 13 px, one step below the labels; Audio leads with volume; one save message (by the project name); Annotate icons all distinct and element clips named like the panel; zoom labels show the real magnification (1.65×, 1.35×); the "Fit" button (a second fullscreen button) and the noise-suppression tip are gone. Verified: `tsc`, 115 unit tests, build, and the browser tests `browser-smoke`, `editor-interactions`, `focus-dot`, `cutting`, `v2-proof`, `v2-visual`, `3d-fit` (the last two tests' zoom-label expectations were updated to the exact values).
+
+### Dan's hand test for the rename and design pass (about 3 minutes)
+
+1. `npm run desktop:dev`. The window title and logo say **Cool Story**; buttons, toggles and the playhead are violet.
+2. Click **coolstory ⌄** (top left): your library lists your takes as before. If it's empty, stop and tell me.
+3. Focus & 3D → click a zoom clip on the timeline: "Selected focus" is at the top of the panel. Switch Classic zoom ↔ 3D perspective there; the clip label changes 2D ↔ 3D.
+4. Annotate: eight different icons. Add a Box: its timeline clip says "Box".
+5. Anything you miss from the removed headlines or footer text? Say so and it comes back.
 - Checked and **not** a bug: dragging footage back over a ripple cut leaves trimmed zooms trimmed — same as Restore footage; ripple trims are permanent by design (Ctrl+Z undoes).
 
 ## Where things stand
