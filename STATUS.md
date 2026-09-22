@@ -1,6 +1,23 @@
 # Status — Studio Screen
 
-**Last updated:** 2026-09-15 night (0.4.2 packed: video slots filled by capture timestamp, on top of 0.4.1's audio-drift fix and export keyframe patch; ready for Dan's simultaneous NVIDIA comparison)
+**Last updated:** 2026-09-22 (renamed to **Cool Story** and recoloured signal violet; full-app review logged below. 0.4.2 is still the latest pack)
+
+## 2026-09-22: Cool Story rename, violet accent, full-app review
+
+**Rename (display name only).** Logo wordmark, window titles, page title, messages, `productName` (so the next pack is `release\Cool Story <version>.exe`) and the app icon. Deliberately **unchanged**, because they are storage addresses: `Videos\Studio Screen` (takes and exports), `%APPDATA%\studio-screen` (library and settings; now pinned in `electron/main.cjs` so a name change can never move it), the IndexedDB name and the `.studio` format tag `studio-screen`. Renaming those later needs a migration step first.
+
+**Recolour.** Peach accent became `--accent: #8f80ff` (signal violet), and olive-tinted greys became cool slate: 251 colour values in `src/styles.css` moved by hue family. Colours that carry meaning were left alone (red removed/record/discard, green export success, the timeline clip-type colours). Default annotation colours drawn into exported video (`compositor.ts`) are still peach on purpose; they're video content, not app chrome.
+
+**Verified:** 115/115 unit tests, `npm run build`, headless screenshots of every panel and dialog at 2560×1440, readability audit (no text under 12 px; the only low-contrast text is the Screen-clip title over the filmstrip, as before), no console errors. **Not yet run:** `a2-recording-ui` (needs an idle PC), `packaged-smoke` / `portable-launch` (need a new pack; they now expect `Cool Story <version>.exe`). Before relying on the rename, pack once and check the library still lists your takes.
+
+**Review findings awaiting Dan's call** (each checked against the code; nothing below is fixed yet):
+- Import: `readProject` (`src/storage.ts`) keeps a `folder` field from an imported `.studio`, so a hand-edited file could make autosave overwrite another take's `project.json`. One-line fix: drop `folder` on import. Your own exports already strip it.
+- Helper pipe: `electron/main.cjs` writes to the helper's stdin with no error listener; if the helper dies at that moment, the main process throws. One-line fix.
+- Keyboard privacy: on AltGr keyboard layouts (German, French…), typing `@`, `{` etc. is logged as a "Ctrl + Alt + <key>" shortcut label (`native/studio-capture/src/main.rs`, shortcut branch). US layout is unaffected.
+- Export: if the PC can't encode AAC/Opus, `exporter.ts` exports silently without sound instead of saying so.
+- GIF export builds a new 256-colour palette per frame (visible colour shimmer on long GIFs).
+- Design wins proposed (not built): drop the marketing headline at the top of each panel; put the selected clip's controls first; make help text smaller than control labels (`.helper-text` is overridden to 16 px near the end of `styles.css`); stale Audio tip about noise suppression (there's no mic); duplicate icons in Annotate (Redact/Box, Spotlight/Circle; Blur uses a move icon); "Fit ▾" toggles fullscreen; one word for zoom/focus/focus moment; "1.6×" clip labels vs "1.65×" in the inspector; four separate "saved locally" messages.
+- Checked and **not** a bug: dragging footage back over a ripple cut leaves trimmed zooms trimmed — same as Restore footage; ripple trims are permanent by design (Ctrl+Z undoes).
 
 ## Where things stand
 
