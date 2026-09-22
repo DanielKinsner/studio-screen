@@ -106,7 +106,11 @@ async function openFixture(app) {
       webPreferences: { backgroundThrottling: false },
     });
     fixture.on("page-title-updated", (e) => e.preventDefault());
+    // Windows won't let a background app raise a new window over the one in
+    // front, so keep the fixture above everything for the injected input.
+    fixture.setAlwaysOnTop(true, "screen-saver");
     await fixture.loadURL("data:text/html," + encodeURIComponent(html));
+    fixture.moveTop();
   }, fixtureHtml);
   const fixture = app.windows().find((p) => p.url().startsWith("data:"));
   await fixture.waitForLoadState();
@@ -161,6 +165,36 @@ async function input(script) {
     { windowsHide: true },
   );
 }
+/** Title of the top-level window Windows would deliver a click to at each physical point. */
+async function windowsAt(points) {
+  const { stdout } = await run(
+    "powershell.exe",
+    [
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      `Add-Type -TypeDefinition 'using System;using System.Text;using System.Runtime.InteropServices;public class W{[DllImport("user32.dll")]public static extern IntPtr SetThreadDpiAwarenessContext(IntPtr c);[StructLayout(LayoutKind.Sequential)]public struct P{public int X;public int Y;}[DllImport("user32.dll")]public static extern IntPtr WindowFromPoint(P p);[DllImport("user32.dll")]public static extern IntPtr GetAncestor(IntPtr h,uint f);[DllImport("user32.dll",CharSet=CharSet.Unicode)]public static extern int GetWindowText(IntPtr h,StringBuilder s,int n);public static string At(int x,int y){var p=new P();p.X=x;p.Y=y;var h=GetAncestor(WindowFromPoint(p),2);var s=new StringBuilder(256);GetWindowText(h,s,256);return s.ToString();}}'
+      [W]::SetThreadDpiAwarenessContext([IntPtr](-4)) | Out-Null
+      ${points.map((p) => `[W]::At(${Math.round(p.x)},${Math.round(p.y)})`).join("\n      ")}`,
+    ],
+    { windowsHide: true },
+  );
+  return stdout.trim().split(/\r?\n/);
+}
+/**
+ * Real clicks and keys go to whatever window is on top, so refuse to send any
+ * unless the fixture itself is under every point the script touches. (On
+ * 2026-09-22 a maximized window covered the fixture and the input landed in it.)
+ */
+async function assertFixtureOnTop(points) {
+  const covering = (await windowsAt(points)).filter(
+    (title) => title !== "Studio Screen Native Test",
+  );
+  if (covering.length)
+    throw new Error(
+      `UNSAFE: "${covering[0]}" covers the test window, so no input was sent.`,
+    );
+}
 async function latestProject(page) {
   return page.evaluate(async () => {
     const { listProjects } = await import("/src/storage.ts");
@@ -211,6 +245,7 @@ async function mainTake({ cursor }) {
     await startTake(page);
     const bar = await waitForBar(app);
     await page.waitForTimeout(800);
+    await assertFixtureOnTop([dot, field, link]);
     const clickedAt = Date.now();
     await input(`
       [T]::SetPhysicalCursorPos(${dot.x},${dot.y}) | Out-Null
