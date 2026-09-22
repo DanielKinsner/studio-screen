@@ -2313,11 +2313,7 @@ export default function App() {
         </section>
         <aside className="inspector">
           <div className="inspector-heading">
-            <h1>
-              {tabs.find((t) => t.id === tab)?.label === "Canvas"
-                ? "Make it yours"
-                : tabs.find((t) => t.id === tab)?.label}
-            </h1>
+            <h1>{tabs.find((t) => t.id === tab)?.label}</h1>
             <SlidersHorizontal size={16} />
           </div>
           <div className="inspector-content">
@@ -2500,14 +2496,6 @@ export default function App() {
                     onChange={(v) => setting("watermarkOpacity", v)}
                   />
                 )}
-                <div className="inspector-note">
-                  <Sparkles size={16} />
-                  <p>
-                    A little framing goes a long way.
-                    <br />
-                    <span>Your screen. With a little more you.</span>
-                  </p>
-                </div>
               </>
             )}
             {tab === "zoom" && (
@@ -2549,7 +2537,6 @@ export default function App() {
             )}
             {tab === "audio" && (
               <>
-                <AudioExtras project={project} edit={edit} notify={notify} />
                 <div className="section-title">
                   <h2>Recording audio</h2>
                   <Volume2 size={15} />
@@ -2602,6 +2589,7 @@ export default function App() {
                     </button>
                   </>
                 )}
+                <AudioExtras project={project} edit={edit} notify={notify} />
               </>
             )}
             {tab === "captions" && (
@@ -2757,9 +2745,6 @@ export default function App() {
             )}
             {tab === "annotations" && (
               <>
-                <div className="section-title">
-                  <h2>Say it with a little emphasis.</h2>
-                </div>
                 <div className="annotation-buttons">
                   {annotationTools.map((a) => (
                     <button
@@ -2953,25 +2938,14 @@ export default function App() {
               </>
             )}
           </div>
-          <div className="inspector-footer">
-            <span className="local-dot" />
-            Local by design.<span>Your recordings stay yours.</span>
-          </div>
         </aside>
       </main>
       <footer className="app-footer">
         <span>
           <span className="status-dot" />
           {window.studioDesktop ? "Desktop studio" : "Local workspace"}
-          <span className="footer-dot">·</span>
-          {saved === "Saved locally"
-            ? "All changes saved on this device"
-            : saved}
         </span>
-        <span>
-          Less editing. More creating.
-          <span className="version">v{__APP_VERSION__}</span>
-        </span>
+        <span className="version">v{__APP_VERSION__}</span>
       </footer>
       {menu && (
         <TimelineMenu

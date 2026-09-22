@@ -41,47 +41,43 @@ export default function MotionPanel({
   const setting = (value: Partial<Project["settings"]>) =>
     edit((p) => ({ ...p, settings: { ...p.settings, ...value } }));
   const mode = z ? z.mode || s.motionMode : s.motionMode;
+  const addButtons = (
+    <div className="button-pair">
+      <button className="button primary" onClick={() => onAdd("3d")}>
+        <Box size={15} />
+        Add 3D zoom
+      </button>
+      <button className="button" onClick={() => onAdd("2d")}>
+        <ZoomIn size={15} />
+        Add 2D
+      </button>
+    </div>
+  );
   return (
     <>
-      <div className="panel-intro">
-        <span className="eyebrow">FOCUS & MOVEMENT</span>
-        <h2>Give your screen some depth.</h2>
-        <p>
-          Choose a look, add a focus moment, then fine-tune it on the timeline.
-        </p>
-      </div>
-      <div className="motion-mode-picker">
-        {(["2d", "3d"] as const).map((m) => (
-          <button
-            key={m}
-            className={mode === m ? "selected" : ""}
-            aria-pressed={mode === m}
-            onClick={() =>
-              z
-                ? update({ mode: m, follow: m === "3d" ? false : z.follow })
-                : setting({ motionMode: m })
-            }
-          >
-            <span className={`motion-tile ${m}`}>
-              <span />
-            </span>
-            <strong>{m === "3d" ? "3D perspective" : "Classic zoom"}</strong>
-            <small>
-              {m === "3d" ? "Depth, tilt & rotation" : "Clean, direct focus"}
-            </small>
-          </button>
-        ))}
-      </div>
-      <div className="button-pair">
-        <button className="button primary" onClick={() => onAdd("3d")}>
-          <Box size={15} />
-          Add 3D zoom
-        </button>
-        <button className="button" onClick={() => onAdd("2d")}>
-          <ZoomIn size={15} />
-          Add 2D
-        </button>
-      </div>
+      {!z && (
+        <>
+          <div className="motion-mode-picker">
+            {(["2d", "3d"] as const).map((m) => (
+              <button
+                key={m}
+                className={mode === m ? "selected" : ""}
+                aria-pressed={mode === m}
+                onClick={() => setting({ motionMode: m })}
+              >
+                <span className={`motion-tile ${m}`}>
+                  <span />
+                </span>
+                <strong>{m === "3d" ? "3D perspective" : "Classic zoom"}</strong>
+                <small>
+                  {m === "3d" ? "Depth, tilt & rotation" : "Clean, direct focus"}
+                </small>
+              </button>
+            ))}
+          </div>
+          {addButtons}
+        </>
+      )}
       {z ? (
         <section className="selected-edit">
           <div className="section-title">
@@ -104,6 +100,20 @@ export default function MotionPanel({
             >
               <Trash2 size={14} />
             </IconButton>
+          </div>
+          <div className="segmented" role="group" aria-label="Zoom look">
+            {(["2d", "3d"] as const).map((m) => (
+              <button
+                key={m}
+                className={mode === m ? "active" : ""}
+                aria-pressed={mode === m}
+                onClick={() =>
+                  update({ mode: m, follow: m === "3d" ? false : z.follow })
+                }
+              >
+                {m === "3d" ? "3D perspective" : "Classic zoom"}
+              </button>
+            ))}
           </div>
           <div className="two-fields">
             <label>
@@ -268,6 +278,7 @@ export default function MotionPanel({
           target.
         </p>
       )}
+      {z && addButtons}
       <details className="advanced-controls" open={!z}>
         <summary>Automatic focus & animation</summary>
         <Toggle
@@ -327,10 +338,6 @@ export default function MotionPanel({
           unit="%"
           onChange={(motionBlur) => setting({ motionBlur })}
         />
-        <p className="helper-text">
-          Motion blur samples the moving screen and cursor. The same effect is
-          included in exports.
-        </p>
         <details className="advanced-controls">
           <summary>Camera spring</summary>
           <Slider

@@ -241,10 +241,6 @@ export function CursorPanel({
     edit((p) => ({ ...p, settings: { ...p.settings, ...value } }));
   return (
     <>
-      <div className="panel-intro">
-        <span className="eyebrow">CURSOR & SHORTCUTS</span>
-        <h2>Make every action easy to follow.</h2>
-      </div>
       <div className="cursor-style-picker">
         {(["dark", "light", "dot"] as const).map((style) => (
           <button
@@ -364,9 +360,9 @@ export function CursorPanel({
         description="Displays captured Ctrl, Alt, and function-key shortcuts"
       />
       <p className="helper-text">
-        Effects apply to cursor metadata. An original cursor baked into the
-        source cannot be erased. Plain typed text is never stored in shortcut
-        metadata.
+        These settings change the drawn cursor. A cursor that is part of the
+        video itself (browser recordings, imported clips) can't be removed.
+        Typed text is never recorded, only shortcuts.
       </p>
     </>
   );
@@ -471,92 +467,6 @@ export function TimelineEdits({
   const z = p.speeds.find((s) => s.id === selected);
   return (
     <>
-      <div className="panel-intro">
-        <span className="eyebrow">PACING & CUTS</span>
-        <h2>Keep the good parts moving.</h2>
-        <p>
-          Speed up a section, skip a pause, or tighten your in and out points.
-        </p>
-      </div>
-      {!p.demo && (
-        <section className="auto-edit">
-          <div className="section-title">
-            <h2>
-              <WandSparkles size={14} />
-              Automatic edit
-            </h2>
-          </div>
-          {p.autoEdit ? (
-            <>
-              <p className="helper-text">
-                Trimmed, sped up and zoomed for you. Dashed clips on the
-                timeline are automatic: remove any with its ×.
-              </p>
-              <button
-                className="button full-width"
-                onClick={() => {
-                  edit(backToRaw);
-                  notify("Back to the raw recording. Your own edits are kept.");
-                }}
-              >
-                Back to raw
-              </button>
-            </>
-          ) : (
-            <button
-              className="button full-width"
-              onClick={() => {
-                const { project, summary } = autoEdit(p, { stop: "other" });
-                if (!summary.applied) {
-                  notify("This recording is too short for an automatic edit.");
-                  return;
-                }
-                edit(() => project);
-                notify(`Automatic edit: ${describeSummary(summary)}.`);
-              }}
-            >
-              <WandSparkles size={15} />
-              Apply automatic edit
-            </button>
-          )}
-        </section>
-      )}
-      <button
-        className="button full-width"
-        onClick={() => {
-          const id = crypto.randomUUID(),
-            start = Math.min(time(), p.trimEnd - 0.1);
-          edit((p) => ({
-            ...p,
-            speeds: [
-              ...p.speeds,
-              { id, start, end: Math.min(p.trimEnd, start + 3), rate: 2 },
-            ],
-          }));
-          onSelect(id);
-        }}
-      >
-        <Plus size={15} />
-        Add speed section
-      </button>
-      <button
-        className="button full-width"
-        style={{ marginTop: 10 }}
-        onClick={() => {
-          const groups = typingSections(p);
-          if (!groups.length) {
-            notify(
-              "No typing activity found. Record with the Windows app, or add a speed section manually.",
-            );
-            return;
-          }
-          edit((p) => ({ ...p, speeds: [...p.speeds, ...groups] }));
-          notify(`Added ${groups.length} sections from typing activity.`);
-        }}
-      >
-        <WandSparkles size={15} />
-        Speed up typing to 2×
-      </button>
       {z && (
         <section className="selected-edit">
           <div className="section-title">
@@ -641,9 +551,88 @@ export function TimelineEdits({
           />
         </section>
       )}
+      {!p.demo && (
+        <section className="auto-edit">
+          <div className="section-title">
+            <h2>
+              <WandSparkles size={14} />
+              Automatic edit
+            </h2>
+          </div>
+          {p.autoEdit ? (
+            <>
+              <p className="helper-text">
+                Trimmed, sped up and zoomed for you. Dashed clips on the
+                timeline are automatic: remove any with its ×.
+              </p>
+              <button
+                className="button full-width"
+                onClick={() => {
+                  edit(backToRaw);
+                  notify("Back to the raw recording. Your own edits are kept.");
+                }}
+              >
+                Back to raw
+              </button>
+            </>
+          ) : (
+            <button
+              className="button full-width"
+              onClick={() => {
+                const { project, summary } = autoEdit(p, { stop: "other" });
+                if (!summary.applied) {
+                  notify("This recording is too short for an automatic edit.");
+                  return;
+                }
+                edit(() => project);
+                notify(`Automatic edit: ${describeSummary(summary)}.`);
+              }}
+            >
+              <WandSparkles size={15} />
+              Apply automatic edit
+            </button>
+          )}
+        </section>
+      )}
+      <button
+        className="button full-width"
+        onClick={() => {
+          const id = crypto.randomUUID(),
+            start = Math.min(time(), p.trimEnd - 0.1);
+          edit((p) => ({
+            ...p,
+            speeds: [
+              ...p.speeds,
+              { id, start, end: Math.min(p.trimEnd, start + 3), rate: 2 },
+            ],
+          }));
+          onSelect(id);
+        }}
+      >
+        <Plus size={15} />
+        Add speed section
+      </button>
+      <button
+        className="button full-width"
+        style={{ marginTop: 10 }}
+        onClick={() => {
+          const groups = typingSections(p);
+          if (!groups.length) {
+            notify(
+              "No typing activity found. Record with the Windows app, or add a speed section manually.",
+            );
+            return;
+          }
+          edit((p) => ({ ...p, speeds: [...p.speeds, ...groups] }));
+          notify(`Added ${groups.length} sections from typing activity.`);
+        }}
+      >
+        <WandSparkles size={15} />
+        Speed up typing to 2×
+      </button>
       <p className="helper-text">
-        Speed sections override the overall playback speed. Overlapping sections
-        use the first section; remove or resize it to change the overlap.
+        Speed sections override the overall playback speed. Where two overlap,
+        the one listed first wins.
       </p>
       <div className="edit-list">
         {p.speeds.map((s) => (

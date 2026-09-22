@@ -372,14 +372,6 @@ p {
   background: #363a3c;
   margin: 0 6px;
 }
-.fit-button {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  color: #a8abae;
-  font-size: var(--text-label);
-  padding: 5px;
-}
 .preview-area {
   flex: 1;
   min-height: 100px;
@@ -1292,44 +1284,6 @@ input[type="range"]::-moz-range-thumb {
   border: 1px solid #6c707a;
   border-radius: 50%;
 }
-.inspector-note {
-  display: flex;
-  gap: 9px;
-  border: 1px solid #3f424980;
-  border-radius: 7px;
-  padding: 13px 11px;
-  background: #2b2e3355;
-  margin-top: 25px;
-  color: #959aa5;
-}
-.inspector-note > svg {
-  margin-top: 2px;
-  color: #9ba1b0;
-}
-.inspector-note p {
-  font-size: var(--text-caption);
-  line-height: 1.8;
-  color: #a1a5af;
-}
-.inspector-note span {
-  color: #9a9ea6;
-  font-size: var(--text-micro);
-}
-.inspector-footer {
-  padding: 16px 18px;
-  border-top: 1px solid #32353a;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: var(--text-micro);
-  color: #a2a5ab;
-  flex-wrap: wrap;
-}
-.inspector-footer > span:last-child {
-  color: #9a9ea6;
-  font-size: var(--text-micro);
-}
-.local-dot,
 .status-dot {
   width: 5px;
   height: 5px;
@@ -1353,10 +1307,6 @@ input[type="range"]::-moz-range-thumb {
   display: flex;
   align-items: center;
   gap: 7px;
-}
-.footer-dot {
-  margin: 0 3px;
-  color: #9d9fa5;
 }
 .version {
   margin-left: 13px;
@@ -1404,9 +1354,10 @@ input[type="range"]::-moz-range-thumb {
   background: #2a2742;
   transform: translateX(12px);
 }
+/* Help text sits one step below the control labels it explains. */
 .helper-text {
-  font-size: var(--text-label);
-  line-height: 1.8;
+  font-size: var(--text-caption);
+  line-height: 1.6;
   color: #989ca4;
   margin: 13px 0 20px;
 }
@@ -2155,9 +2106,6 @@ input[type="range"]::-moz-range-thumb {
   .app-footer {
     font-size: var(--text-micro);
   }
-  .inspector-footer > span:last-child {
-    display: none;
-  }
   .select-field {
     font-size: var(--text-caption);
   }
@@ -2342,12 +2290,6 @@ input[type="range"]::-moz-range-thumb {
   .background-swatch {
     min-height: 30px;
   }
-  .inspector-footer {
-    padding: 15px 22px;
-  }
-  .inspector-footer > span:last-child {
-    display: inline;
-  }
   .app-footer {
     padding: 10px 15px;
     height: auto;
@@ -2445,9 +2387,6 @@ input[type="range"]::-moz-range-thumb {
     height: 580px;
   }
   .project-label {
-    font-size: var(--text-micro);
-  }
-  .fit-button {
     font-size: var(--text-micro);
   }
   .editor-tools > .vertical-line {
@@ -2568,26 +2507,9 @@ input[type="range"]::-moz-range-thumb {
   opacity: 0.85;
 }
 /* Editing hierarchy and motion controls */
-.panel-intro {
-  margin: 0 0 18px;
-}
-.eyebrow {
-  font-size: var(--text-label);
-  letter-spacing: 0.12em;
-  color: #b5bac4;
-  font-weight: 700;
-}
-.panel-intro h2 {
-  font-size: var(--text-display);
-  line-height: 1.2;
-  font-weight: 500;
-  letter-spacing: -0.6px;
-  margin: 10px 0;
-}
-.panel-intro p,
 .advanced-controls p {
-  font-size: var(--text-body);
-  line-height: 1.65;
+  font-size: var(--text-caption);
+  line-height: 1.6;
   color: #a5a7aa;
 }
 .motion-mode-picker {
@@ -2899,10 +2821,6 @@ input[type="range"]::-moz-range-thumb {
 .tool {
   font-size: var(--text-control);
   line-height: 1.25;
-}
-.helper-text {
-  font-size: var(--text-body);
-  line-height: 1.65;
 }
 .toggle-copy strong {
   font-size: var(--text-body);
