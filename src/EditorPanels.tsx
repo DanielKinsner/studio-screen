@@ -111,7 +111,7 @@ export function StylePresets({ project, edit, notify }: PanelProps) {
                 ...v,
                 settings: { ...v.settings, ...withCameraFeel(p.value) },
               }));
-              notify(`${p.name} applied to canvas and automatic focus.`);
+              notify(`${p.name} applied to canvas and automatic zooms.`);
             }}
           >
             <span style={{ background: p.color }}>

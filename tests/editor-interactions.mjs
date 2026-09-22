@@ -24,7 +24,7 @@ try {
 
   // 1. Deselect.
   const zoomClips = page.locator(".zoom-track .zoom-clip");
-  const selectedFocus = page.getByRole("heading", { name: "Selected focus" });
+  const selectedFocus = page.getByRole("heading", { name: "Selected zoom" });
   const zoomCount = await zoomClips.count();
   check(zoomCount > 0, "The sample project has no zoom clips to select.");
   const select = async () => {

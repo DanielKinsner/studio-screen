@@ -52,7 +52,7 @@ try {
   // The flat recording at padding 0, for scale.
   const flat = await measure();
   // Dan's case: a default 3D zoom at padding 0.
-  await page.getByRole("button", { name: "Focus & 3D", exact: true }).click();
+  await page.getByRole("button", { name: "Zoom & 3D", exact: true }).click();
   await page.getByRole("button", { name: "Add 3D zoom", exact: true }).click();
   await page.waitForTimeout(600);
   await preview.screenshot({ path: "tests/3d-fit-default.png" });

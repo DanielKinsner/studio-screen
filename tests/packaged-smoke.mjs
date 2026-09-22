@@ -65,7 +65,7 @@ try {
   await expect(page.getByLabel("Composited video preview")).toBeVisible();
   await expect(page.locator(".app-footer")).toContainText("Desktop studio");
   await expect(page.locator(".app-footer .version")).toHaveText(`v${version}`);
-  await page.getByRole("button", { name: "Focus & 3D", exact: true }).click();
+  await page.getByRole("button", { name: "Zoom & 3D", exact: true }).click();
   await page.getByRole("button", { name: "Add 3D zoom", exact: true }).click();
   await expect(
     page.getByLabel("Tilt left / right", { exact: true }),

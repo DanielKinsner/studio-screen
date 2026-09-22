@@ -70,7 +70,7 @@ export default function MotionPanel({
                 </span>
                 <strong>{m === "3d" ? "3D perspective" : "Classic zoom"}</strong>
                 <small>
-                  {m === "3d" ? "Depth, tilt & rotation" : "Clean, direct focus"}
+                  {m === "3d" ? "Depth, tilt & rotation" : "Flat and direct"}
                 </small>
               </button>
             ))}
@@ -83,10 +83,10 @@ export default function MotionPanel({
           <div className="section-title">
             <h2>
               <Focus size={14} />
-              Selected focus
+              Selected zoom
             </h2>
             <IconButton
-              label="Delete focus"
+              label="Delete zoom"
               onClick={() => {
                 edit((p) => ({
                   ...p,
@@ -95,7 +95,7 @@ export default function MotionPanel({
                     ? [...p.dismissedZooms, z.id]
                     : p.dismissedZooms,
                 }));
-                notify("Focus removed. Undo to restore it.");
+                notify("Zoom removed. Undo to restore it.");
               }}
             >
               <Trash2 size={14} />
@@ -274,18 +274,18 @@ export default function MotionPanel({
         </section>
       ) : (
         <p className="helper-text">
-          Select a focus clip on the timeline to edit its angle, timing, and
-          target.
+          Select a zoom on the timeline to edit its timing, angle and focus
+          point.
         </p>
       )}
       {z && addButtons}
       <details className="advanced-controls" open={!z}>
-        <summary>Automatic focus & animation</summary>
+        <summary>Automatic zooms & camera</summary>
         <Toggle
           label="Automatic zoom"
           checked={s.autoZoom}
           onChange={(autoZoom) => setting({ autoZoom })}
-          description="Create focus moments from captured clicks"
+          description="Zoom in on the clicks you recorded"
         />
         <Toggle
           label="Zoom while typing"
@@ -378,7 +378,7 @@ export default function MotionPanel({
         </details>
       </details>
       <div className="section-title">
-        <h2>Focus moments</h2>
+        <h2>Zooms</h2>
         <span className="count-badge">{zooms.length}</span>
       </div>
       <div className="edit-list">
@@ -395,8 +395,8 @@ export default function MotionPanel({
             )}
             <span>
               {(v.mode || s.motionMode) === "3d"
-                ? "3D perspective"
-                : "2D focus"}
+                ? "3D zoom"
+                : "2D zoom"}
               <small>
                 {timecode(v.start)} – {timecode(v.end)} · {times(v.scale)}
               </small>

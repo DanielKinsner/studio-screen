@@ -9,7 +9,7 @@ try {
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("http://127.0.0.1:5173");
   await page.getByText("Saved locally", { exact: true }).waitFor();
-  await page.getByRole("button", { name: "Focus & 3D", exact: true }).click();
+  await page.getByRole("button", { name: "Zoom & 3D", exact: true }).click();
   await page.getByRole("button", { name: "Add 3D zoom", exact: true }).click();
   const clip = page.getByRole("button", { name: "3D · 1.35×", exact: true });
   const b = await clip.boundingBox();

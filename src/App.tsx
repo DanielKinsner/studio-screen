@@ -124,7 +124,7 @@ import {
 
 const tabs = [
   { id: "background", label: "Canvas", icon: Layers },
-  { id: "zoom", label: "Focus & 3D", icon: ZoomIn },
+  { id: "zoom", label: "Zoom & 3D", icon: ZoomIn },
   { id: "pacing", label: "Pacing", icon: Scissors },
   { id: "cursor", label: "Cursor", icon: MousePointer2 },
   { id: "audio", label: "Audio", icon: AudioLines },
@@ -1218,7 +1218,7 @@ export default function App() {
     seekTo(Math.min(start + 1, project.trimEnd - 0.1));
     notify(
       mode === "3d"
-        ? "3D focus added. Choose an angle in the inspector."
+        ? "3D zoom added. Choose an angle in the inspector."
         : "Zoom added. Adjust its focus point in the inspector.",
     );
   }
@@ -1822,7 +1822,7 @@ export default function App() {
               <span>
                 <span className="tiny-dot" />
                 {project.demo
-                  ? "Sample project · try a 3D focus moment"
+                  ? "Sample project · try a 3D zoom"
                   : `${project.points.length ? "Cursor tracking captured" : "Original capture"} · ${timecode(project.duration)}`}
               </span>
               <button

@@ -7,7 +7,7 @@ try {
   page.on("pageerror", (e) => console.error(e));
   await page.goto("http://127.0.0.1:5173");
   await page.getByText("Saved locally", { exact: true }).waitFor();
-  await page.getByRole("button", { name: "Focus & 3D", exact: true }).click();
+  await page.getByRole("button", { name: "Zoom & 3D", exact: true }).click();
   await page.getByRole("button", { name: "Add 3D zoom", exact: true }).click();
   await page.screenshot({ path: "tests/editor-v2.png", fullPage: true });
   await page

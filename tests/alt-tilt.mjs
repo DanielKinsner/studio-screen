@@ -53,7 +53,7 @@ try {
   expect(results.altPress.after).toEqual({ ...before, menuVisible: false });
 
   // 2. Alt+drag tilts a 3D zoom.
-  await page.getByRole("button", { name: "Focus & 3D", exact: true }).click();
+  await page.getByRole("button", { name: "Zoom & 3D", exact: true }).click();
   await page.getByRole("button", { name: "Add 3D zoom", exact: true }).click();
   const tiltY = page.getByLabel("Tilt left / right", { exact: true });
   await expect(tiltY).toHaveValue("18");
